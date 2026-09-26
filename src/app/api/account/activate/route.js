@@ -1,6 +1,8 @@
 import crypto from "crypto";
 
-import { FieldValue } from "firebase-admin/firestore";
+import {
+  FieldValue,
+} from "firebase-admin/firestore";
 
 import {
   adminAuth,
@@ -12,7 +14,8 @@ import {
   requireAppCheck,
 } from "@/services/appCheckServer";
 
-export const runtime = "nodejs";
+export const runtime =
+  "nodejs";
 
 const YOUTH_ID_ALPHABET =
   "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -29,17 +32,25 @@ function hashesMatch(
   storedHash
 ) {
   if (
-    typeof providedHash !== "string" ||
-    typeof storedHash !== "string"
+    typeof providedHash !==
+      "string" ||
+    typeof storedHash !==
+      "string"
   ) {
     return false;
   }
 
   const providedBuffer =
-    Buffer.from(providedHash, "hex");
+    Buffer.from(
+      providedHash,
+      "hex"
+    );
 
   const storedBuffer =
-    Buffer.from(storedHash, "hex");
+    Buffer.from(
+      storedHash,
+      "hex"
+    );
 
   if (
     providedBuffer.length !==
@@ -57,7 +68,11 @@ function hashesMatch(
 function createRandomYouthId() {
   let randomPart = "";
 
-  for (let index = 0; index < 12; index += 1) {
+  for (
+    let index = 0;
+    index < 12;
+    index += 1
+  ) {
     randomPart +=
       YOUTH_ID_ALPHABET[
         crypto.randomInt(
@@ -86,18 +101,25 @@ async function reserveUniqueYouthId(
         .collection(
           "youthIdReservations"
         )
-        .doc(youthId.toLowerCase());
+        .doc(
+          youthId.toLowerCase()
+        );
 
-    let reserved = false;
+    let reserved =
+      false;
 
     await adminDb.runTransaction(
-      async (transaction) => {
+      async (
+        transaction
+      ) => {
         const snapshot =
           await transaction.get(
             reservationReference
           );
 
-        if (snapshot.exists) {
+        if (
+          snapshot.exists
+        ) {
           return;
         }
 
@@ -106,14 +128,17 @@ async function reserveUniqueYouthId(
           {
             youthId,
             registrationId,
-            status: "reserved",
+
+            status:
+              "reserved",
 
             createdAt:
               FieldValue.serverTimestamp(),
           }
         );
 
-        reserved = true;
+        reserved =
+          true;
       }
     );
 
@@ -134,7 +159,10 @@ function validatePassword(
   password,
   registration
 ) {
-  if (typeof password !== "string") {
+  if (
+    typeof password !==
+    "string"
+  ) {
     return "Password is required.";
   }
 
@@ -145,19 +173,35 @@ function validatePassword(
     return "Password must contain between 10 and 64 characters.";
   }
 
-  if (!/[A-Z]/.test(password)) {
+  if (
+    !/[A-Z]/.test(
+      password
+    )
+  ) {
     return "Password must contain an uppercase letter.";
   }
 
-  if (!/[a-z]/.test(password)) {
+  if (
+    !/[a-z]/.test(
+      password
+    )
+  ) {
     return "Password must contain a lowercase letter.";
   }
 
-  if (!/[0-9]/.test(password)) {
+  if (
+    !/[0-9]/.test(
+      password
+    )
+  ) {
     return "Password must contain a number.";
   }
 
-  if (!/[^A-Za-z0-9]/.test(password)) {
+  if (
+    !/[^A-Za-z0-9]/.test(
+      password
+    )
+  ) {
     return "Password must contain a special character.";
   }
 
@@ -183,25 +227,35 @@ function createRequestError(
   status,
   code
 ) {
-  const error = new Error(message);
+  const error =
+    new Error(message);
 
-  error.status = status;
-  error.code = code;
+  error.status =
+    status;
+
+  error.code =
+    code;
 
   return error;
 }
 
-function getExpiryDate(value) {
+function getExpiryDate(
+  value
+) {
   if (!value) {
     return null;
   }
 
   const date =
     value?.toDate?.() ||
-    new Date(value);
+    new Date(
+      value
+    );
 
   if (
-    Number.isNaN(date.getTime())
+    Number.isNaN(
+      date.getTime()
+    )
   ) {
     return null;
   }
@@ -209,37 +263,62 @@ function getExpiryDate(value) {
   return date;
 }
 
-export async function POST(request) {
-  let createdUser = null;
-  let youthIdReservation = null;
-  let registrationReference = null;
-  let activationClaimed = false;
+export async function POST(
+  request
+) {
+  let createdUser =
+    null;
+
+  let youthIdReservation =
+    null;
+
+  let registrationReference =
+    null;
+
+  let activationClaimed =
+    false;
 
   try {
+    /*
+      Account activation is a sensitive,
+      one-time action.
+
+      The frontend sends a limited-use
+      App Check token, so consume it here.
+    */
+
     await requireAppCheck(
       request,
       {
         consume: true,
       }
     );
+
     const {
       registrationId,
       token,
       password,
       confirmPassword,
-    } = await request.json();
+    } =
+      await request.json();
 
     if (
-      typeof registrationId !== "string" ||
+      typeof registrationId !==
+        "string" ||
       !registrationId.trim() ||
-      typeof token !== "string" ||
+      typeof token !==
+        "string" ||
       !token.trim() ||
-      typeof password !== "string" ||
-      typeof confirmPassword !== "string"
+      typeof password !==
+        "string" ||
+      typeof confirmPassword !==
+        "string"
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             "All password fields are required.",
         },
@@ -249,10 +328,15 @@ export async function POST(request) {
       );
     }
 
-    if (password !== confirmPassword) {
+    if (
+      password !==
+      confirmPassword
+    ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
+
           message:
             "Passwords do not match.",
         },
@@ -267,22 +351,29 @@ export async function POST(request) {
         .collection(
           "pendingRegistrations"
         )
-        .doc(registrationId);
+        .doc(
+          registrationId
+        );
 
     /*
-      Atomically verify the account setup token
-      and claim this registration for activation.
+      Atomically validate the setup token
+      and lock the registration while the
+      Firebase account is being created.
     */
 
     const registration =
       await adminDb.runTransaction(
-        async (transaction) => {
+        async (
+          transaction
+        ) => {
           const snapshot =
             await transaction.get(
               registrationReference
             );
 
-          if (!snapshot.exists) {
+          if (
+            !snapshot.exists
+          ) {
             throw createRequestError(
               "The registration could not be found.",
               404,
@@ -320,16 +411,18 @@ export async function POST(request) {
             true;
 
           let storedTokenHash;
+
           let tokenExpiry;
 
           /*
-            MINOR:
-            Parent must already have approved consent.
-            We use the separate activation token created
-            by /api/consent/approve.
+            Minor:
+            parental consent must already
+            have been approved.
           */
 
-          if (requiresParentalConsent) {
+          if (
+            requiresParentalConsent
+          ) {
             if (
               registrationData.status !==
                 "consent_approved" ||
@@ -352,11 +445,9 @@ export async function POST(request) {
               );
           } else {
             /*
-              ADULT:
-              No parental consent is required.
-
-              The setup token created during registration
-              is used directly.
+              Adult:
+              the setup token created during
+              registration is used directly.
             */
 
             if (
@@ -382,7 +473,9 @@ export async function POST(request) {
           }
 
           const providedTokenHash =
-            hashToken(token);
+            hashToken(
+              token
+            );
 
           if (
             !hashesMatch(
@@ -415,7 +508,9 @@ export async function POST(request) {
               registrationData
             );
 
-          if (passwordError) {
+          if (
+            passwordError
+          ) {
             throw createRequestError(
               passwordError,
               400,
@@ -426,7 +521,8 @@ export async function POST(request) {
           transaction.update(
             registrationReference,
             {
-              activationInProgress: true,
+              activationInProgress:
+                true,
 
               activationStartedAt:
                 FieldValue.serverTimestamp(),
@@ -440,13 +536,12 @@ export async function POST(request) {
         }
       );
 
-    activationClaimed = true;
+    activationClaimed =
+      true;
 
     /*
-      Generate and reserve a completely random
-      Youth Initiative ID.
-
-      It contains no name or date-of-birth data.
+      Generate a random Youth ID that
+      contains no personal information.
     */
 
     youthIdReservation =
@@ -461,30 +556,43 @@ export async function POST(request) {
       `${youthId.toLowerCase()}@youthinitiative.local`;
 
     /*
-      Firebase Authentication securely stores
-      the password.
+      Firebase Authentication securely
+      stores the password.
 
-      Password is never written to Firestore.
+      The password is never stored
+      in Firestore.
     */
 
     createdUser =
-      await adminAuth.createUser({
-        email: internalEmail,
-        password,
+      await adminAuth.createUser(
+        {
+          email:
+            internalEmail,
 
-        displayName:
-          `${registration.firstName} ${registration.lastName}`,
+          password,
 
-        emailVerified: true,
-        disabled: false,
-      });
+          displayName:
+            `${registration.firstName} ${registration.lastName}`,
+
+          emailVerified:
+            true,
+
+          disabled:
+            false,
+        }
+      );
 
     const studentReference =
       adminDb
-        .collection("students")
-        .doc(createdUser.uid);
+        .collection(
+          "students"
+        )
+        .doc(
+          createdUser.uid
+        );
 
-    const batch = adminDb.batch();
+    const batch =
+      adminDb.batch();
 
     batch.set(
       studentReference,
@@ -511,6 +619,7 @@ export async function POST(request) {
           null,
 
         internalEmail,
+
         youthId,
 
         dateOfBirth:
@@ -520,9 +629,11 @@ export async function POST(request) {
           registration.requiresParentalConsent ===
           true,
 
-        role: "student",
+        role:
+          "student",
 
-        accountStatus: "active",
+        accountStatus:
+          "active",
 
         consentStatus:
           registration.requiresParentalConsent ===
@@ -530,17 +641,22 @@ export async function POST(request) {
             ? "approved"
             : "not_required",
 
-        learningMode: null,
+        learningMode:
+          null,
 
         interests: [],
 
-        onboardingCompleted: false,
+        onboardingCompleted:
+          false,
 
         totalXp: 0,
+
         level: 1,
+
         badgeCount: 0,
 
-        completedWorkshopCount: 0,
+        completedWorkshopCount:
+          0,
 
         currentStreak: 0,
 
@@ -550,39 +666,42 @@ export async function POST(request) {
         updatedAt:
           FieldValue.serverTimestamp(),
 
-        lastLoginAt: null,
+        lastLoginAt:
+          null,
       }
     );
 
     /*
-      Finalize the pending registration.
+      Finalize the registration.
 
-      Consent approval is NOT created here.
-      For minors it was already recorded by
-      /api/consent/approve.
+      Minor consent was already recorded
+      in /api/consent/approve.
     */
 
-    const registrationUpdate = {
-      firebaseUid:
-        createdUser.uid,
+    const registrationUpdate =
+      {
+        firebaseUid:
+          createdUser.uid,
 
-      youthId,
-      internalEmail,
+        youthId,
 
-      status:
-        "account_created",
+        internalEmail,
 
-      accountCreatedAt:
-        FieldValue.serverTimestamp(),
+        status:
+          "account_created",
 
-      activationInProgress: false,
+        accountCreatedAt:
+          FieldValue.serverTimestamp(),
 
-      activationCompletedAt:
-        FieldValue.serverTimestamp(),
+        activationInProgress:
+          false,
 
-      updatedAt:
-        FieldValue.serverTimestamp(),
-    };
+        activationCompletedAt:
+          FieldValue.serverTimestamp(),
+
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      };
 
     if (
       registration.requiresParentalConsent ===
@@ -610,7 +729,8 @@ export async function POST(request) {
       youthIdReservation
         .reservationReference,
       {
-        status: "assigned",
+        status:
+          "assigned",
 
         firebaseUid:
           createdUser.uid,
@@ -624,7 +744,8 @@ export async function POST(request) {
 
     return Response.json(
       {
-        success: true,
+        success:
+          true,
 
         youthId,
 
@@ -636,10 +757,21 @@ export async function POST(request) {
       }
     );
   } catch (error) {
-    const appCheckResponse =
-      appCheckErrorResponse(error);
+    /*
+      App Check errors should return
+      a clean 401 response.
+    */
 
-    if (appCheckResponse) {
+    const appCheckResponse =
+      appCheckErrorResponse(
+        error
+      );
+
+    if (
+      appCheckResponse &&
+      error?.code !==
+        "invalid-activation-token"
+    ) {
       return appCheckResponse;
     }
 
@@ -649,17 +781,21 @@ export async function POST(request) {
     );
 
     /*
-      If Firebase Auth was created but Firestore
-      failed, remove the Auth user so we do not
-      leave a broken account behind.
+      If Firebase Auth was created but
+      Firestore failed, remove the user
+      so a broken account is not left.
     */
 
-    if (createdUser?.uid) {
+    if (
+      createdUser?.uid
+    ) {
       try {
         await adminAuth.deleteUser(
           createdUser.uid
         );
-      } catch (cleanupError) {
+      } catch (
+        cleanupError
+      ) {
         console.error(
           "Failed to clean up Auth user:",
           cleanupError
@@ -668,7 +804,8 @@ export async function POST(request) {
     }
 
     /*
-      Remove unused Youth ID reservation.
+      Remove an unused Youth ID
+      reservation after a failure.
     */
 
     if (
@@ -679,7 +816,9 @@ export async function POST(request) {
         await youthIdReservation
           .reservationReference
           .delete();
-      } catch (cleanupError) {
+      } catch (
+        cleanupError
+      ) {
         console.error(
           "Failed to clean up Youth ID reservation:",
           cleanupError
@@ -688,8 +827,8 @@ export async function POST(request) {
     }
 
     /*
-      Release activation lock so the user can
-      retry if account creation failed.
+      Release the activation lock so
+      the user can retry.
     */
 
     if (
@@ -702,7 +841,8 @@ export async function POST(request) {
 
         if (
           snapshot.exists &&
-          snapshot.data().status !==
+          snapshot.data()
+            .status !==
             "account_created"
         ) {
           await registrationReference.update(
@@ -718,7 +858,9 @@ export async function POST(request) {
             }
           );
         }
-      } catch (cleanupError) {
+      } catch (
+        cleanupError
+      ) {
         console.error(
           "Failed to release activation lock:",
           cleanupError
@@ -726,10 +868,13 @@ export async function POST(request) {
       }
     }
 
-    if (error?.status) {
+    if (
+      error?.status
+    ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             error.message,
@@ -750,7 +895,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "An account has already been created for this registration.",
@@ -763,7 +909,8 @@ export async function POST(request) {
 
     return Response.json(
       {
-        success: false,
+        success:
+          false,
 
         message:
           "The account could not be activated. Please try again.",

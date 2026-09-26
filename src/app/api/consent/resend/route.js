@@ -1,30 +1,49 @@
 import crypto from "crypto";
 
-import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
+import {
+  FieldValue,
+} from "firebase-admin/firestore";
 
-import { adminDb } from "@/services/firebaseAdmin";
+import {
+  Resend,
+} from "resend";
+
+import {
+  adminDb,
+} from "@/services/firebaseAdmin";
 
 import {
   appCheckErrorResponse,
   requireAppCheck,
 } from "@/services/appCheckServer";
 
-export const runtime = "nodejs";
+export const runtime =
+  "nodejs";
 
-const resend = new Resend(
-  process.env.RESEND_API_KEY
-);
+const resend =
+  new Resend(
+    process.env.RESEND_API_KEY
+  );
 
-const CONSENT_EXPIRY_MINUTES = 30;
+const CONSENT_EXPIRY_MINUTES =
+  30;
 
-const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS =
+  60;
 
-function hashToken(token) {
+function hashToken(
+  token
+) {
   return crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
+    .createHash(
+      "sha256"
+    )
+    .update(
+      token
+    )
+    .digest(
+      "hex"
+    );
 }
 
 function hashesMatch(
@@ -32,8 +51,10 @@ function hashesMatch(
   storedHash
 ) {
   if (
-    typeof providedHash !== "string" ||
-    typeof storedHash !== "string"
+    typeof providedHash !==
+      "string" ||
+    typeof storedHash !==
+      "string"
   ) {
     return false;
   }
@@ -63,14 +84,18 @@ function hashesMatch(
   );
 }
 
-function getDate(value) {
+function getDate(
+  value
+) {
   if (!value) {
     return null;
   }
 
   const date =
     value?.toDate?.() ||
-    new Date(value);
+    new Date(
+      value
+    );
 
   if (
     Number.isNaN(
@@ -83,22 +108,53 @@ function getDate(value) {
   return date;
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function escapeHtml(
+  value
+) {
+  return String(
+    value
+  )
+    .replaceAll(
+      "&",
+      "&amp;"
+    )
+    .replaceAll(
+      "<",
+      "&lt;"
+    )
+    .replaceAll(
+      ">",
+      "&gt;"
+    )
+    .replaceAll(
+      '"',
+      "&quot;"
+    )
+    .replaceAll(
+      "'",
+      "&#039;"
+    );
 }
 
-export async function POST(request) {
+export async function POST(
+  request
+) {
   try {
-    await requireAppCheck(request);
+    /*
+      Consent resend is a pre-login
+      endpoint, so App Check is required
+      but Firebase Authentication is not.
+    */
+
+    await requireAppCheck(
+      request
+    );
+
     const {
       registrationId,
       resendToken,
-    } = await request.json();
+    } =
+      await request.json();
 
     if (
       typeof registrationId !==
@@ -110,7 +166,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "The resend request is incomplete.",
@@ -126,7 +183,9 @@ export async function POST(request) {
         .collection(
           "pendingRegistrations"
         )
-        .doc(registrationId);
+        .doc(
+          registrationId
+        );
 
     const registrationSnapshot =
       await registrationReference.get();
@@ -136,7 +195,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "The registration could not be found.",
@@ -151,9 +211,8 @@ export async function POST(request) {
       registrationSnapshot.data();
 
     /*
-      Only a registration still waiting for
-      parental consent can request another
-      consent email.
+      Only registrations still waiting
+      for parental consent can resend.
     */
 
     if (
@@ -167,7 +226,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "This registration is no longer waiting for parental consent.",
@@ -183,7 +243,9 @@ export async function POST(request) {
     */
 
     const providedResendHash =
-      hashToken(resendToken);
+      hashToken(
+        resendToken
+      );
 
     if (
       !hashesMatch(
@@ -194,7 +256,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "This resend request is not authorized.",
@@ -218,7 +281,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "The resend session has expired. Please begin registration again.",
@@ -239,7 +303,9 @@ export async function POST(request) {
           .lastConsentEmailSentAt
       );
 
-    if (lastEmailTime) {
+    if (
+      lastEmailTime
+    ) {
       const secondsSinceLastEmail =
         Math.floor(
           (
@@ -259,7 +325,8 @@ export async function POST(request) {
 
         return Response.json(
           {
-            success: false,
+            success:
+              false,
 
             message:
               `Please wait ${waitSeconds} seconds before requesting another email.`,
@@ -279,7 +346,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "No parent or guardian email is attached to this registration.",
@@ -291,15 +359,21 @@ export async function POST(request) {
     }
 
     /*
-      Every resend gets a NEW consent token.
+      Every resend receives a completely
+      new consent token.
 
-      The old consent link becomes invalid.
+      That automatically invalidates the
+      previous consent link.
     */
 
     const newConsentToken =
       crypto
-        .randomBytes(32)
-        .toString("hex");
+        .randomBytes(
+          32
+        )
+        .toString(
+          "hex"
+        );
 
     const newConsentTokenHash =
       hashToken(
@@ -315,24 +389,33 @@ export async function POST(request) {
       );
 
     /*
-      Save the new token before sending so
-      the new link is valid as soon as it
-      arrives.
+      Save the new token before sending
+      the email.
     */
 
-    await registrationReference.update({
-      consentTokenHash:
-        newConsentTokenHash,
+    await registrationReference.update(
+      {
+        consentTokenHash:
+          newConsentTokenHash,
 
-      consentExpiresAt:
-        newConsentExpiry,
+        consentExpiresAt:
+          newConsentExpiry,
 
-      emailStatus:
-        "sending",
+        emailStatus:
+          "sending",
 
-      updatedAt:
-        FieldValue.serverTimestamp(),
-    });
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      }
+    );
+
+    /*
+      Leave the existing environment
+      setup unchanged for now.
+
+      Production sender/domain setup will
+      be handled after client approval.
+    */
 
     const appUrl =
       process.env
@@ -353,113 +436,120 @@ export async function POST(request) {
       )}`;
 
     const emailResult =
-      await resend.emails.send({
-        from:
-          process.env.EMAIL_FROM ||
-          "SAIT Youth Initiative <onboarding@resend.dev>",
+      await resend.emails.send(
+        {
+          from:
+            process.env.EMAIL_FROM ||
+            "SAIT Youth Initiative <onboarding@resend.dev>",
 
-        to: [
-          registration.parentEmail,
-        ],
+          to: [
+            registration.parentEmail,
+          ],
 
-        subject:
-          "New Parental Consent Link – SAIT Youth Initiative",
+          subject:
+            "New Parental Consent Link – SAIT Youth Initiative",
 
-        html: `
-          <!doctype html>
-
-          <html lang="en">
-            <body
-              style="
-                margin:0;
-                padding:30px;
-                background:#f4f5f7;
-                font-family:Arial,Helvetica,sans-serif;
-                color:#222;
-              "
-            >
-              <div
+          html: `
+            <!doctype html>
+            <html lang="en">
+              <body
                 style="
-                  max-width:620px;
-                  margin:auto;
-                  background:#ffffff;
-                  padding:32px;
-                  border-radius:14px;
-                  border-top:4px solid #e2232a;
+                  margin:0;
+                  padding:30px;
+                  background:#f4f5f7;
+                  font-family:Arial,Helvetica,sans-serif;
+                  color:#222;
                 "
               >
                 <div
                   style="
-                    color:#e2232a;
-                    font-size:34px;
-                    font-weight:900;
+                    max-width:620px;
+                    margin:auto;
+                    background:#ffffff;
+                    padding:32px;
+                    border-radius:14px;
+                    border-top:4px solid #e2232a;
                   "
                 >
-                  SAIT
+                  <div
+                    style="
+                      color:#e2232a;
+                      font-size:34px;
+                      font-weight:900;
+                    "
+                  >
+                    SAIT
+                  </div>
+
+                  <p>
+                    Hello Parent or Guardian,
+                  </p>
+
+                  <p>
+                    A new parental consent link
+                    was requested for
+                    <strong>
+                      ${safeFullName}
+                    </strong>.
+                  </p>
+
+                  <a
+                    href="${consentUrl}"
+                    style="
+                      display:inline-block;
+                      margin-top:12px;
+                      padding:14px 24px;
+                      background:#e2232a;
+                      color:white;
+                      text-decoration:none;
+                      border-radius:8px;
+                      font-weight:700;
+                    "
+                  >
+                    Review and Provide Consent
+                  </a>
+
+                  <p
+                    style="
+                      margin-top:24px;
+                      color:#777;
+                      font-size:13px;
+                    "
+                  >
+                    This new link expires in
+                    30 minutes. Any previous
+                    consent link should no longer
+                    be used.
+                  </p>
                 </div>
+              </body>
+            </html>
+          `,
+        }
+      );
 
-                <p>
-                  Hello Parent or Guardian,
-                </p>
+    if (
+      emailResult.error
+    ) {
+      await registrationReference.update(
+        {
+          emailStatus:
+            "failed",
 
-                <p>
-                  A new parental consent link
-                  was requested for
-                  <strong>
-                    ${safeFullName}
-                  </strong>.
-                </p>
+          emailError:
+            emailResult.error
+              .message ||
+            "Email could not be sent.",
 
-                <a
-                  href="${consentUrl}"
-                  style="
-                    display:inline-block;
-                    margin-top:12px;
-                    padding:14px 24px;
-                    background:#e2232a;
-                    color:white;
-                    text-decoration:none;
-                    border-radius:8px;
-                    font-weight:700;
-                  "
-                >
-                  Review and Provide Consent
-                </a>
-
-                <p
-                  style="
-                    margin-top:24px;
-                    color:#777;
-                    font-size:13px;
-                  "
-                >
-                  This new link expires in
-                  30 minutes. Any previous
-                  consent link should no longer
-                  be used.
-                </p>
-              </div>
-            </body>
-          </html>
-        `,
-      });
-
-    if (emailResult.error) {
-      await registrationReference.update({
-        emailStatus:
-          "failed",
-
-        emailError:
-          emailResult.error.message ||
-          "Email could not be sent.",
-
-        updatedAt:
-          FieldValue.serverTimestamp(),
-      });
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
 
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "The consent email could not be sent. Please try again.",
@@ -470,43 +560,56 @@ export async function POST(request) {
       );
     }
 
-    await registrationReference.update({
-      emailStatus:
-        "sent",
+    await registrationReference.update(
+      {
+        emailStatus:
+          "sent",
 
-      emailId:
-        emailResult.data?.id ||
-        null,
+        emailId:
+          emailResult.data
+            ?.id ||
+          null,
 
-      emailError:
-        null,
+        emailError:
+          null,
 
-      emailSentAt:
-        FieldValue.serverTimestamp(),
+        emailSentAt:
+          FieldValue.serverTimestamp(),
 
-      lastConsentEmailSentAt:
-        FieldValue.serverTimestamp(),
+        lastConsentEmailSentAt:
+          FieldValue.serverTimestamp(),
 
-      resendCount:
-        FieldValue.increment(1),
+        resendCount:
+          FieldValue.increment(
+            1
+          ),
 
-      updatedAt:
-        FieldValue.serverTimestamp(),
-    });
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      }
+    );
 
-    return Response.json({
-      success: true,
+    return Response.json(
+      {
+        success:
+          true,
 
-      message:
-        "A new parental consent email has been sent.",
-    });
+        message:
+          "A new parental consent email has been sent.",
+      }
+    );
   } catch (error) {
     const appCheckResponse =
-      appCheckErrorResponse(error);
+      appCheckErrorResponse(
+        error
+      );
 
-    if (appCheckResponse) {
+    if (
+      appCheckResponse
+    ) {
       return appCheckResponse;
     }
+
     console.error(
       "Consent resend error:",
       error
@@ -514,7 +617,8 @@ export async function POST(request) {
 
     return Response.json(
       {
-        success: false,
+        success:
+          false,
 
         message:
           "The consent email could not be resent. Please try again.",
