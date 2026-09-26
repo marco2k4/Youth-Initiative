@@ -5,21 +5,47 @@ import {
   Timestamp,
 } from "firebase-admin/firestore";
 
-import { adminDb } from "@/services/firebaseAdmin";
+import {
+  adminDb,
+} from "@/services/firebaseAdmin";
+
+import {
+  adminAccessResponse,
+  requireActiveAdmin,
+} from "@/services/adminAccess";
 
 export const runtime = "nodejs";
 
-export async function POST(request) {
+const ALLOWED_DURATIONS = [
+  5,
+  10,
+  15,
+  30,
+];
+
+export async function POST(
+  request
+) {
   try {
+    const admin =
+      await requireActiveAdmin(
+        request
+      );
+
     const {
       workshopId,
       durationMinutes = 15,
     } = await request.json();
 
-    if (!workshopId) {
+    if (
+      typeof workshopId !==
+        "string" ||
+      !workshopId.trim()
+    ) {
       return Response.json(
         {
           success: false,
+
           message:
             "Workshop ID is required.",
         },
@@ -29,16 +55,46 @@ export async function POST(request) {
       );
     }
 
-    const workshopSnapshot =
-      await adminDb
-        .collection("workshops")
-        .doc(workshopId)
-        .get();
+    const duration =
+      Number(
+        durationMinutes
+      );
 
-    if (!workshopSnapshot.exists) {
+    if (
+      !ALLOWED_DURATIONS.includes(
+        duration
+      )
+    ) {
       return Response.json(
         {
           success: false,
+
+          message:
+            "Attendance duration is invalid.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const workshopSnapshot =
+      await adminDb
+        .collection(
+          "workshops"
+        )
+        .doc(
+          workshopId.trim()
+        )
+        .get();
+
+    if (
+      !workshopSnapshot.exists
+    ) {
+      return Response.json(
+        {
+          success: false,
+
           message:
             "Workshop not found.",
         },
@@ -57,7 +113,7 @@ export async function POST(request) {
       Timestamp.fromDate(
         new Date(
           Date.now() +
-            durationMinutes *
+            duration *
               60 *
               1000
         )
@@ -71,7 +127,8 @@ export async function POST(request) {
         .doc();
 
     await attendanceReference.set({
-      workshopId,
+      workshopId:
+        workshopId.trim(),
 
       code:
         attendanceCode,
@@ -79,6 +136,9 @@ export async function POST(request) {
       active: true,
 
       expiresAt,
+
+      createdBy:
+        admin.uid,
 
       createdAt:
         FieldValue.serverTimestamp(),
@@ -102,6 +162,15 @@ export async function POST(request) {
           .toISOString(),
     });
   } catch (error) {
+    const accessResponse =
+      adminAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
     console.error(
       "Create attendance session error:",
       error
@@ -110,6 +179,7 @@ export async function POST(request) {
     return Response.json(
       {
         success: false,
+
         message:
           "Attendance QR could not be created.",
       },

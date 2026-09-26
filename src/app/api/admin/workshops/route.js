@@ -1,34 +1,194 @@
-import { FieldValue } from "firebase-admin/firestore";
+import {
+  FieldValue,
+} from "firebase-admin/firestore";
 
-import { adminDb } from "@/services/firebaseAdmin";
+import {
+  adminDb,
+} from "@/services/firebaseAdmin";
+
+import {
+  adminAccessResponse,
+  requireActiveAdmin,
+} from "@/services/adminAccess";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  try {
-    const workshopSnapshot = await adminDb
-      .collection("workshops")
-      .orderBy("title")
-      .get();
+const VALID_LEARNING_MODES = [
+  "in-person",
+  "online",
+  "both",
+];
 
-    const workshops = workshopSnapshot.docs.map(
-      (workshopDocument) => ({
-        id: workshopDocument.id,
-        ...workshopDocument.data(),
-      })
+const VALID_STATUSES = [
+  "active",
+  "inactive",
+];
+
+function validateWorkshop(
+  workshop
+) {
+  if (
+    !workshop?.title?.trim() ||
+    !workshop?.programArea?.trim() ||
+    !workshop?.grade?.trim()
+  ) {
+    return "Title, program area and grade are required.";
+  }
+
+  if (
+    workshop.learningMode &&
+    !VALID_LEARNING_MODES.includes(
+      workshop.learningMode
+    )
+  ) {
+    return "Learning mode is invalid.";
+  }
+
+  if (
+    workshop.status &&
+    !VALID_STATUSES.includes(
+      workshop.status
+    )
+  ) {
+    return "Workshop status is invalid.";
+  }
+
+  return null;
+}
+
+function buildWorkshopData(
+  workshop
+) {
+  const capacity =
+    workshop.capacity === "" ||
+    workshop.capacity === null ||
+    workshop.capacity === undefined
+      ? null
+      : Number(
+          workshop.capacity
+        );
+
+  const xpReward =
+    Number(
+      workshop.xpReward
     );
+
+  return {
+    title:
+      workshop.title.trim(),
+
+    programArea:
+      workshop.programArea.trim(),
+
+    category:
+      workshop.category?.trim() ||
+      "General",
+
+    grade:
+      workshop.grade.trim(),
+
+    description:
+      workshop.description?.trim() ||
+      "",
+
+    informationUrl:
+      workshop.informationUrl?.trim() ||
+      "",
+
+    registrationUrl:
+      workshop.registrationUrl?.trim() ||
+      "https://saitdigitalyouth.campbrainregistration.com/",
+
+    learningMode:
+      workshop.learningMode ||
+      "in-person",
+
+    startDate:
+      workshop.startDate ||
+      null,
+
+    endDate:
+      workshop.endDate ||
+      null,
+
+    time:
+      workshop.time?.trim() ||
+      "",
+
+    location:
+      workshop.location?.trim() ||
+      "",
+
+    capacity:
+      Number.isFinite(capacity)
+        ? capacity
+        : null,
+
+    xpReward:
+      Number.isFinite(xpReward) &&
+      xpReward >= 0
+        ? xpReward
+        : 100,
+
+    status:
+      workshop.status ||
+      "active",
+  };
+}
+
+export async function GET(
+  request
+) {
+  try {
+    await requireActiveAdmin(
+      request
+    );
+
+    const workshopSnapshot =
+      await adminDb
+        .collection(
+          "workshops"
+        )
+        .orderBy("title")
+        .get();
+
+    const workshops =
+      workshopSnapshot.docs.map(
+        (
+          workshopDocument
+        ) => ({
+          id:
+            workshopDocument.id,
+
+          ...workshopDocument.data(),
+        })
+      );
 
     return Response.json({
       success: true,
       workshops,
     });
   } catch (error) {
-    console.error("Get workshops error:", error);
+    const accessResponse =
+      adminAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
+    console.error(
+      "Get workshops error:",
+      error
+    );
 
     return Response.json(
       {
         success: false,
-        message: "Workshops could not be loaded.",
+
+        message:
+          "Workshops could not be loaded.",
       },
       {
         status: 500,
@@ -37,20 +197,29 @@ export async function GET() {
   }
 }
 
-export async function POST(request) {
+export async function POST(
+  request
+) {
   try {
-    const workshopData = await request.json();
+    const admin =
+      await requireActiveAdmin(
+        request
+      );
 
-    if (
-      !workshopData.title?.trim() ||
-      !workshopData.programArea?.trim() ||
-      !workshopData.grade?.trim()
-    ) {
+    const workshopData =
+      await request.json();
+
+    const validationError =
+      validateWorkshop(
+        workshopData
+      );
+
+    if (validationError) {
       return Response.json(
         {
           success: false,
           message:
-            "Title, program area and grade are required.",
+            validationError,
         },
         {
           status: 400,
@@ -58,64 +227,61 @@ export async function POST(request) {
       );
     }
 
-    const workshopReference = await adminDb
-      .collection("workshops")
-      .add({
-        title: workshopData.title.trim(),
-        programArea: workshopData.programArea.trim(),
-        category:
-          workshopData.category?.trim() || "General",
-        grade: workshopData.grade.trim(),
-        description:
-          workshopData.description?.trim() || "",
+    const workshopReference =
+      await adminDb
+        .collection(
+          "workshops"
+        )
+        .add({
+          ...buildWorkshopData(
+            workshopData
+          ),
 
-        informationUrl:
-          workshopData.informationUrl?.trim() || "",
+          createdBy:
+            admin.uid,
 
-        registrationUrl:
-          workshopData.registrationUrl?.trim() ||
-          "https://saitdigitalyouth.campbrainregistration.com/",
+          createdAt:
+            FieldValue.serverTimestamp(),
 
-        learningMode:
-          workshopData.learningMode || "in-person",
-
-        startDate: workshopData.startDate || null,
-        endDate: workshopData.endDate || null,
-        time: workshopData.time?.trim() || "",
-        location:
-          workshopData.location?.trim() || "",
-
-        capacity:
-          workshopData.capacity === ""
-            ? null
-            : Number(workshopData.capacity),
-
-        xpReward:
-          Number(workshopData.xpReward) || 100,
-
-        status: workshopData.status || "active",
-
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        });
 
     return Response.json(
       {
         success: true,
-        message: "Workshop created successfully.",
-        workshopId: workshopReference.id,
+
+        message:
+          "Workshop created successfully.",
+
+        workshopId:
+          workshopReference.id,
       },
       {
         status: 201,
       }
     );
   } catch (error) {
-    console.error("Create workshop error:", error);
+    const accessResponse =
+      adminAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
+    console.error(
+      "Create workshop error:",
+      error
+    );
 
     return Response.json(
       {
         success: false,
-        message: "Workshop could not be created.",
+
+        message:
+          "Workshop could not be created.",
       },
       {
         status: 500,
@@ -124,8 +290,15 @@ export async function POST(request) {
   }
 }
 
-export async function PUT(request) {
+export async function PUT(
+  request
+) {
   try {
+    const admin =
+      await requireActiveAdmin(
+        request
+      );
+
     const {
       id,
       ...workshopData
@@ -135,7 +308,9 @@ export async function PUT(request) {
       return Response.json(
         {
           success: false,
-          message: "Workshop ID is required.",
+
+          message:
+            "Workshop ID is required.",
         },
         {
           status: 400,
@@ -143,58 +318,87 @@ export async function PUT(request) {
       );
     }
 
-    await adminDb
-      .collection("workshops")
-      .doc(id)
-      .update({
-        title: workshopData.title.trim(),
-        programArea: workshopData.programArea.trim(),
-        category:
-          workshopData.category?.trim() || "General",
-        grade: workshopData.grade.trim(),
-        description:
-          workshopData.description?.trim() || "",
+    const validationError =
+      validateWorkshop(
+        workshopData
+      );
 
-        informationUrl:
-          workshopData.informationUrl?.trim() || "",
+    if (validationError) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            validationError,
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-        registrationUrl:
-          workshopData.registrationUrl?.trim() ||
-          "https://saitdigitalyouth.campbrainregistration.com/",
+    const reference =
+      adminDb
+        .collection(
+          "workshops"
+        )
+        .doc(id);
 
-        learningMode:
-          workshopData.learningMode || "in-person",
+    const snapshot =
+      await reference.get();
 
-        startDate: workshopData.startDate || null,
-        endDate: workshopData.endDate || null,
-        time: workshopData.time?.trim() || "",
-        location:
-          workshopData.location?.trim() || "",
+    if (!snapshot.exists) {
+      return Response.json(
+        {
+          success: false,
 
-        capacity:
-          workshopData.capacity === ""
-            ? null
-            : Number(workshopData.capacity),
+          message:
+            "Workshop not found.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
 
-        xpReward:
-          Number(workshopData.xpReward) || 100,
+    await reference.update({
+      ...buildWorkshopData(
+        workshopData
+      ),
 
-        status: workshopData.status || "active",
+      updatedBy:
+        admin.uid,
 
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      updatedAt:
+        FieldValue.serverTimestamp(),
+    });
 
     return Response.json({
       success: true,
-      message: "Workshop updated successfully.",
+
+      message:
+        "Workshop updated successfully.",
     });
   } catch (error) {
-    console.error("Update workshop error:", error);
+    const accessResponse =
+      adminAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
+    console.error(
+      "Update workshop error:",
+      error
+    );
 
     return Response.json(
       {
         success: false,
-        message: "Workshop could not be updated.",
+
+        message:
+          "Workshop could not be updated.",
       },
       {
         status: 500,
@@ -203,15 +407,25 @@ export async function PUT(request) {
   }
 }
 
-export async function DELETE(request) {
+export async function DELETE(
+  request
+) {
   try {
-    const { id } = await request.json();
+    await requireActiveAdmin(
+      request
+    );
+
+    const {
+      id,
+    } = await request.json();
 
     if (!id) {
       return Response.json(
         {
           success: false,
-          message: "Workshop ID is required.",
+
+          message:
+            "Workshop ID is required.",
         },
         {
           status: 400,
@@ -219,22 +433,59 @@ export async function DELETE(request) {
       );
     }
 
-    await adminDb
-      .collection("workshops")
-      .doc(id)
-      .delete();
+    const reference =
+      adminDb
+        .collection(
+          "workshops"
+        )
+        .doc(id);
+
+    const snapshot =
+      await reference.get();
+
+    if (!snapshot.exists) {
+      return Response.json(
+        {
+          success: false,
+
+          message:
+            "Workshop not found.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    await reference.delete();
 
     return Response.json({
       success: true,
-      message: "Workshop deleted successfully.",
+
+      message:
+        "Workshop deleted successfully.",
     });
   } catch (error) {
-    console.error("Delete workshop error:", error);
+    const accessResponse =
+      adminAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
+    console.error(
+      "Delete workshop error:",
+      error
+    );
 
     return Response.json(
       {
         success: false,
-        message: "Workshop could not be deleted.",
+
+        message:
+          "Workshop could not be deleted.",
       },
       {
         status: 500,

@@ -3,6 +3,10 @@ import crypto from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/services/firebaseAdmin";
+import {
+  adminAccessResponse,
+  requireActiveAdmin,
+} from "@/services/adminAccess";
 
 export const runtime = "nodejs";
 
@@ -75,7 +79,11 @@ function getCategory(title, programArea, description) {
 
 export async function POST(request) {
   try {
-    const { workshops } = await request.json();
+    const admin =
+      await requireActiveAdmin(request);
+
+    const { workshops } =
+      await request.json();
 
     if (!Array.isArray(workshops)) {
       return Response.json(
@@ -146,6 +154,7 @@ export async function POST(request) {
           workshopReference,
           {
             title: workshop.title.trim(),
+
             programArea:
               workshop.programArea.trim(),
 
@@ -182,8 +191,11 @@ export async function POST(request) {
             status: "active",
 
             importedFromExcel: true,
+            importedBy: admin.uid,
+
             updatedAt:
               FieldValue.serverTimestamp(),
+
             createdAt:
               FieldValue.serverTimestamp(),
           },
@@ -204,7 +216,17 @@ export async function POST(request) {
       importedCount,
     });
   } catch (error) {
-    console.error("Excel import error:", error);
+    const accessResponse =
+      adminAccessResponse(error);
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
+    console.error(
+      "Excel import error:",
+      error
+    );
 
     return Response.json(
       {

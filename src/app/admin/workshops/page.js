@@ -15,6 +15,8 @@ import {
 
 import * as XLSX from "xlsx";
 
+import { adminFetch } from "@/services/adminApi";
+
 const emptyWorkshop = {
   title: "",
   programArea: "",
@@ -60,6 +62,7 @@ export default function AdminWorkshopsPage() {
     useState(emptyWorkshop);
 
   const [message, setMessage] = useState("");
+
   const [errorMessage, setErrorMessage] =
     useState("");
 
@@ -72,7 +75,7 @@ export default function AdminWorkshopsPage() {
       setLoading(true);
       setErrorMessage("");
 
-      const response = await fetch(
+      const response = await adminFetch(
         "/api/admin/workshops"
       );
 
@@ -156,26 +159,49 @@ export default function AdminWorkshopsPage() {
 
     setFormData({
       title: workshop.title || "",
+
       programArea:
         workshop.programArea || "",
-      category: workshop.category || "",
-      grade: workshop.grade || "",
+
+      category:
+        workshop.category || "",
+
+      grade:
+        workshop.grade || "",
+
       description:
         workshop.description || "",
+
       informationUrl:
         workshop.informationUrl || "",
+
       registrationUrl:
         workshop.registrationUrl ||
         "https://saitdigitalyouth.campbrainregistration.com/",
+
       learningMode:
         workshop.learningMode || "in-person",
-      startDate: workshop.startDate || "",
-      endDate: workshop.endDate || "",
-      time: workshop.time || "",
-      location: workshop.location || "",
-      capacity: workshop.capacity ?? "",
-      xpReward: workshop.xpReward || 100,
-      status: workshop.status || "active",
+
+      startDate:
+        workshop.startDate || "",
+
+      endDate:
+        workshop.endDate || "",
+
+      time:
+        workshop.time || "",
+
+      location:
+        workshop.location || "",
+
+      capacity:
+        workshop.capacity ?? "",
+
+      xpReward:
+        workshop.xpReward || 100,
+
+      status:
+        workshop.status || "active",
     });
 
     setShowForm(true);
@@ -199,15 +225,17 @@ export default function AdminWorkshopsPage() {
       setMessage("");
       setErrorMessage("");
 
-      const response = await fetch(
+      const response = await adminFetch(
         "/api/admin/workshops",
         {
-          method: editingWorkshop
-            ? "PUT"
-            : "POST",
+          method:
+            editingWorkshop
+              ? "PUT"
+              : "POST",
 
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
 
           body: JSON.stringify({
@@ -217,14 +245,18 @@ export default function AdminWorkshopsPage() {
         }
       );
 
-      const responseData = await response.json();
+      const responseData =
+        await response.json();
 
       if (!response.ok) {
-        throw new Error(responseData.message);
+        throw new Error(
+          responseData.message
+        );
       }
 
       setMessage(responseData.message);
       setShowForm(false);
+
       await loadWorkshops();
     } catch (error) {
       setErrorMessage(
@@ -251,13 +283,14 @@ export default function AdminWorkshopsPage() {
       setErrorMessage("");
       setMessage("");
 
-      const response = await fetch(
+      const response = await adminFetch(
         "/api/admin/workshops",
         {
           method: "DELETE",
 
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
 
           body: JSON.stringify({
@@ -266,13 +299,17 @@ export default function AdminWorkshopsPage() {
         }
       );
 
-      const responseData = await response.json();
+      const responseData =
+        await response.json();
 
       if (!response.ok) {
-        throw new Error(responseData.message);
+        throw new Error(
+          responseData.message
+        );
       }
 
       setMessage(responseData.message);
+
       await loadWorkshops();
     } catch (error) {
       setErrorMessage(
@@ -283,7 +320,8 @@ export default function AdminWorkshopsPage() {
   }
 
   async function handleExcelImport(event) {
-    const selectedFile = event.target.files?.[0];
+    const selectedFile =
+      event.target.files?.[0];
 
     if (!selectedFile) {
       return;
@@ -297,36 +335,46 @@ export default function AdminWorkshopsPage() {
       const fileBuffer =
         await selectedFile.arrayBuffer();
 
-      const workbook = XLSX.read(fileBuffer, {
-        type: "array",
-      });
+      const workbook =
+        XLSX.read(fileBuffer, {
+          type: "array",
+        });
 
       const firstSheetName =
         workbook.SheetNames[0];
 
       const worksheet =
-        workbook.Sheets[firstSheetName];
+        workbook.Sheets[
+          firstSheetName
+        ];
 
       const excelRows =
-        XLSX.utils.sheet_to_json(worksheet, {
-          defval: "",
-        });
+        XLSX.utils.sheet_to_json(
+          worksheet,
+          {
+            defval: "",
+          }
+        );
 
       const workshopsToImport =
         excelRows.map((row) => ({
           programArea:
             row["Program Area"] || "",
+
           title:
             row["Course Name"] || "",
+
           grade:
             row["Grade"] || "",
+
           description:
             row["Course Description"] || "",
+
           informationUrl:
             row["Link"] || "",
         }));
 
-      const response = await fetch(
+      const response = await adminFetch(
         "/api/admin/workshops/import",
         {
           method: "POST",
@@ -337,18 +385,24 @@ export default function AdminWorkshopsPage() {
           },
 
           body: JSON.stringify({
-            workshops: workshopsToImport,
+            workshops:
+              workshopsToImport,
           }),
         }
       );
 
-      const responseData = await response.json();
+      const responseData =
+        await response.json();
 
       if (!response.ok) {
-        throw new Error(responseData.message);
+        throw new Error(
+          responseData.message
+        );
       }
 
-      setMessage(responseData.message);
+      setMessage(
+        responseData.message
+      );
 
       await loadWorkshops();
     } catch (error) {
@@ -395,14 +449,18 @@ export default function AdminWorkshopsPage() {
               type="file"
               accept=".xlsx,.xls"
               disabled={importing}
-              onChange={handleExcelImport}
+              onChange={
+                handleExcelImport
+              }
             />
           </label>
 
           <button
             type="button"
             className="admin-create-button"
-            onClick={openCreateForm}
+            onClick={
+              openCreateForm
+            }
           >
             <Plus size={19} />
             Create Workshop
@@ -431,7 +489,9 @@ export default function AdminWorkshopsPage() {
             placeholder="Search workshops..."
             value={searchText}
             onChange={(event) =>
-              setSearchText(event.target.value)
+              setSearchText(
+                event.target.value
+              )
             }
           />
         </div>
@@ -448,14 +508,16 @@ export default function AdminWorkshopsPage() {
             All Program Areas
           </option>
 
-          {programAreas.map((programArea) => (
-            <option
-              key={programArea}
-              value={programArea}
-            >
-              {programArea}
-            </option>
-          ))}
+          {programAreas.map(
+            (programArea) => (
+              <option
+                key={programArea}
+                value={programArea}
+              >
+                {programArea}
+              </option>
+            )
+          )}
         </select>
 
         <select
@@ -469,9 +531,11 @@ export default function AdminWorkshopsPage() {
           <option value="all">
             All Statuses
           </option>
+
           <option value="active">
             Active
           </option>
+
           <option value="inactive">
             Inactive
           </option>
@@ -488,9 +552,12 @@ export default function AdminWorkshopsPage() {
 
             Loading workshops...
           </div>
-        ) : filteredWorkshops.length === 0 ? (
+        ) : filteredWorkshops.length ===
+          0 ? (
           <div className="admin-workshop-empty">
-            <FileSpreadsheet size={46} />
+            <FileSpreadsheet
+              size={46}
+            />
 
             <h2>No workshops found</h2>
 
@@ -532,14 +599,17 @@ export default function AdminWorkshopsPage() {
                         {workshop.programArea}
                       </td>
 
-                      <td>{workshop.grade}</td>
+                      <td>
+                        {workshop.grade}
+                      </td>
 
                       <td>
                         {workshop.learningMode}
                       </td>
 
                       <td>
-                        {workshop.xpReward || 100}
+                        {workshop.xpReward ||
+                          100}
                       </td>
 
                       <td>
@@ -561,7 +631,9 @@ export default function AdminWorkshopsPage() {
                               )
                             }
                           >
-                            <Edit3 size={18} />
+                            <Edit3
+                              size={18}
+                            />
                           </button>
 
                           <button
@@ -574,7 +646,9 @@ export default function AdminWorkshopsPage() {
                               )
                             }
                           >
-                            <Trash2 size={18} />
+                            <Trash2
+                              size={18}
+                            />
                           </button>
                         </div>
                       </td>
@@ -617,13 +691,19 @@ export default function AdminWorkshopsPage() {
 
             <form
               className="admin-workshop-form"
-              onSubmit={handleSaveWorkshop}
+              onSubmit={
+                handleSaveWorkshop
+              }
             >
               <FormField
                 label="Workshop Title"
                 name="title"
-                value={formData.title}
-                onChange={handleInputChange}
+                value={
+                  formData.title
+                }
+                onChange={
+                  handleInputChange
+                }
                 required
               />
 
@@ -634,54 +714,76 @@ export default function AdminWorkshopsPage() {
                   value={
                     formData.programArea
                   }
-                  onChange={handleInputChange}
+                  onChange={
+                    handleInputChange
+                  }
                   required
                 />
 
                 <FormField
                   label="Category"
                   name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
+                  value={
+                    formData.category
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
               </div>
 
               <FormField
                 label="Grade"
                 name="grade"
-                value={formData.grade}
-                onChange={handleInputChange}
+                value={
+                  formData.grade
+                }
+                onChange={
+                  handleInputChange
+                }
                 required
               />
 
               <label className="admin-form-field">
-                <span>Description</span>
+                <span>
+                  Description
+                </span>
 
                 <textarea
                   name="description"
                   rows={5}
-                  value={formData.description}
-                  onChange={handleInputChange}
+                  value={
+                    formData.description
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
               </label>
 
               <div className="admin-form-two-columns">
                 <label className="admin-form-field">
-                  <span>Learning Mode</span>
+                  <span>
+                    Learning Mode
+                  </span>
 
                   <select
                     name="learningMode"
                     value={
                       formData.learningMode
                     }
-                    onChange={handleInputChange}
+                    onChange={
+                      handleInputChange
+                    }
                   >
                     <option value="in-person">
                       In Person
                     </option>
+
                     <option value="online">
                       Online
                     </option>
+
                     <option value="both">
                       Both
                     </option>
@@ -689,16 +791,23 @@ export default function AdminWorkshopsPage() {
                 </label>
 
                 <label className="admin-form-field">
-                  <span>Status</span>
+                  <span>
+                    Status
+                  </span>
 
                   <select
                     name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
+                    value={
+                      formData.status
+                    }
+                    onChange={
+                      handleInputChange
+                    }
                   >
                     <option value="active">
                       Active
                     </option>
+
                     <option value="inactive">
                       Inactive
                     </option>
@@ -711,16 +820,24 @@ export default function AdminWorkshopsPage() {
                   label="Start Date"
                   name="startDate"
                   type="date"
-                  value={formData.startDate}
-                  onChange={handleInputChange}
+                  value={
+                    formData.startDate
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
 
                 <FormField
                   label="End Date"
                   name="endDate"
                   type="date"
-                  value={formData.endDate}
-                  onChange={handleInputChange}
+                  value={
+                    formData.endDate
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
               </div>
 
@@ -728,15 +845,23 @@ export default function AdminWorkshopsPage() {
                 <FormField
                   label="Time"
                   name="time"
-                  value={formData.time}
-                  onChange={handleInputChange}
+                  value={
+                    formData.time
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
 
                 <FormField
                   label="Location"
                   name="location"
-                  value={formData.location}
-                  onChange={handleInputChange}
+                  value={
+                    formData.location
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
               </div>
 
@@ -745,16 +870,24 @@ export default function AdminWorkshopsPage() {
                   label="Capacity"
                   name="capacity"
                   type="number"
-                  value={formData.capacity}
-                  onChange={handleInputChange}
+                  value={
+                    formData.capacity
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
 
                 <FormField
                   label="XP Reward"
                   name="xpReward"
                   type="number"
-                  value={formData.xpReward}
-                  onChange={handleInputChange}
+                  value={
+                    formData.xpReward
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
               </div>
 
@@ -762,16 +895,24 @@ export default function AdminWorkshopsPage() {
                 label="Information URL"
                 name="informationUrl"
                 type="url"
-                value={formData.informationUrl}
-                onChange={handleInputChange}
+                value={
+                  formData.informationUrl
+                }
+                onChange={
+                  handleInputChange
+                }
               />
 
               <FormField
                 label="Registration URL"
                 name="registrationUrl"
                 type="url"
-                value={formData.registrationUrl}
-                onChange={handleInputChange}
+                value={
+                  formData.registrationUrl
+                }
+                onChange={
+                  handleInputChange
+                }
               />
 
               <div className="admin-form-buttons">
@@ -796,6 +937,7 @@ export default function AdminWorkshopsPage() {
                         size={19}
                         className="button-spinner"
                       />
+
                       Saving...
                     </>
                   ) : editingWorkshop ? (

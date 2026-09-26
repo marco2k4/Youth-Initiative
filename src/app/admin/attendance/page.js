@@ -2,37 +2,69 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { LoaderCircle, QrCode } from "lucide-react";
+import {
+  LoaderCircle,
+  QrCode,
+} from "lucide-react";
+
+import {
+  adminFetch,
+} from "@/services/adminApi";
 
 export default function AdminAttendancePage() {
-  const [workshops, setWorkshops] = useState([]);
-  const [workshopId, setWorkshopId] = useState("");
-  const [duration, setDuration] = useState(15);
+  const [workshops, setWorkshops] =
+    useState([]);
 
-  const [qrImage, setQrImage] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
+  const [workshopId, setWorkshopId] =
+    useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [duration, setDuration] =
+    useState(15);
+
+  const [qrImage, setQrImage] =
+    useState("");
+
+  const [expiresAt, setExpiresAt] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
   useEffect(() => {
     async function loadWorkshops() {
       try {
-        const response = await fetch("/api/admin/workshops");
-        const data = await response.json();
+        const response =
+          await adminFetch(
+            "/api/admin/workshops"
+          );
+
+        const data =
+          await response.json();
 
         if (!response.ok) {
           throw new Error(
-            data.message || "Could not load workshops."
+            data.message ||
+              "Could not load workshops."
           );
         }
 
-        setWorkshops(data.workshops || []);
+        setWorkshops(
+          data.workshops || []
+        );
       } catch (error) {
-        console.error("Load workshops error:", error);
+        console.error(
+          "Load workshops error:",
+          error
+        );
 
         setErrorMessage(
-          error.message || "Could not load workshops."
+          error.message ||
+            "Could not load workshops."
         );
       }
     }
@@ -43,7 +75,10 @@ export default function AdminAttendancePage() {
   async function generateQr() {
     try {
       if (!workshopId) {
-        setErrorMessage("Please select a workshop.");
+        setErrorMessage(
+          "Please select a workshop."
+        );
+
         return;
       }
 
@@ -51,45 +86,61 @@ export default function AdminAttendancePage() {
       setErrorMessage("");
       setQrImage("");
 
-      const response = await fetch(
-        "/api/admin/attendance",
-        {
-          method: "POST",
+      const response =
+        await adminFetch(
+          "/api/admin/attendance",
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type": "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify({
-            workshopId,
-            durationMinutes: Number(duration),
-          }),
-        }
-      );
+            body: JSON.stringify({
+              workshopId,
 
-      const data = await response.json();
+              durationMinutes:
+                Number(duration),
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message || "QR code could not be generated."
+          data.message ||
+            "QR code could not be generated."
         );
       }
 
-      const qrPayload = JSON.stringify({
-        attendanceSessionId:
-          data.attendanceSessionId,
+      const qrPayload =
+        JSON.stringify({
+          attendanceSessionId:
+            data.attendanceSessionId,
 
-        code: data.code,
-      });
-
-      const generatedQrImage =
-        await QRCode.toDataURL(qrPayload, {
-          width: 380,
-          margin: 2,
+          code:
+            data.code,
         });
 
-      setQrImage(generatedQrImage);
-      setExpiresAt(data.expiresAt);
+      const generatedQrImage =
+        await QRCode.toDataURL(
+          qrPayload,
+          {
+            width: 380,
+            margin: 2,
+          }
+        );
+
+      setQrImage(
+        generatedQrImage
+      );
+
+      setExpiresAt(
+        data.expiresAt
+      );
     } catch (error) {
       console.error(
         "Generate attendance QR error:",
@@ -111,9 +162,13 @@ export default function AdminAttendancePage() {
         <div className="admin-attendance-heading">
           <QrCode size={42} />
 
-          <span>ATTENDANCE MANAGEMENT</span>
+          <span>
+            ATTENDANCE MANAGEMENT
+          </span>
 
-          <h1>Generate Attendance QR</h1>
+          <h1>
+            Generate Attendance QR
+          </h1>
 
           <p>
             Select a workshop and create a temporary
@@ -134,21 +189,31 @@ export default function AdminAttendancePage() {
             <select
               value={workshopId}
               onChange={(event) =>
-                setWorkshopId(event.target.value)
+                setWorkshopId(
+                  event.target.value
+                )
               }
             >
               <option value="">
                 Select workshop
               </option>
 
-              {workshops.map((workshop) => (
-                <option
-                  key={workshop.id}
-                  value={workshop.id}
-                >
-                  {workshop.title}
-                </option>
-              ))}
+              {workshops.map(
+                (workshop) => (
+                  <option
+                    key={
+                      workshop.id
+                    }
+                    value={
+                      workshop.id
+                    }
+                  >
+                    {
+                      workshop.title
+                    }
+                  </option>
+                )
+              )}
             </select>
           </label>
 
@@ -158,7 +223,9 @@ export default function AdminAttendancePage() {
             <select
               value={duration}
               onChange={(event) =>
-                setDuration(event.target.value)
+                setDuration(
+                  event.target.value
+                )
               }
             >
               <option value="5">
@@ -181,8 +248,13 @@ export default function AdminAttendancePage() {
 
           <button
             type="button"
-            disabled={!workshopId || loading}
-            onClick={generateQr}
+            disabled={
+              !workshopId ||
+              loading
+            }
+            onClick={
+              generateQr
+            }
           >
             {loading ? (
               <>
@@ -195,7 +267,10 @@ export default function AdminAttendancePage() {
               </>
             ) : (
               <>
-                <QrCode size={19} />
+                <QrCode
+                  size={19}
+                />
+
                 Generate QR Code
               </>
             )}
@@ -204,7 +279,9 @@ export default function AdminAttendancePage() {
 
         {qrImage && (
           <div className="attendance-qr-result">
-            <h2>Attendance QR Code</h2>
+            <h2>
+              Attendance QR Code
+            </h2>
 
             <p>
               Students can now scan this code from
