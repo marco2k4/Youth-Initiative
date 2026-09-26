@@ -2,7 +2,6 @@ import crypto from "crypto";
 
 import {
   FieldValue,
-  Timestamp,
 } from "firebase-admin/firestore";
 
 import {
@@ -11,8 +10,6 @@ import {
 } from "@/services/firebaseAdmin";
 
 export const runtime = "nodejs";
-
-const PROCESSING_LOCK_MINUTES = 5;
 
 function hashToken(token) {
   return crypto
@@ -127,58 +124,6 @@ function errorResponse(
   );
 }
 
-async function releaseProcessingLock(
-  resetReference,
-  operationId
-) {
-  try {
-    await adminDb.runTransaction(
-      async (transaction) => {
-        const snapshot =
-          await transaction.get(
-            resetReference
-          );
-
-        if (!snapshot.exists) {
-          return;
-        }
-
-        const reset =
-          snapshot.data();
-
-        if (
-          reset.status ===
-            "processing" &&
-          reset.processingOperationId ===
-            operationId
-        ) {
-          transaction.update(
-            resetReference,
-            {
-              status:
-                "ready_for_reset",
-
-              processingOperationId:
-                FieldValue.delete(),
-
-              processingStartedAt:
-                FieldValue.delete(),
-
-              updatedAt:
-                FieldValue.serverTimestamp(),
-            }
-          );
-        }
-      }
-    );
-  } catch (error) {
-    console.error(
-      "Could not release password reset lock:",
-      error?.message
-    );
-  }
-}
-
 export async function POST(request) {
   let resetReference = null;
   let operationId = null;
@@ -191,10 +136,6 @@ export async function POST(request) {
       password,
       confirmPassword,
     } = await request.json();
-
-    /*
-      Basic request validation.
-    */
 
     if (
       typeof requestId !== "string" ||
@@ -210,8 +151,7 @@ export async function POST(request) {
 
     if (
       typeof password !== "string" ||
-      typeof confirmPassword !==
-        "string"
+      typeof confirmPassword !== "string"
     ) {
       return errorResponse(
         "Password information is incomplete.",
@@ -250,24 +190,13 @@ export async function POST(request) {
       crypto.randomUUID();
 
     /*
-      ------------------------------------------------
       SECURITY TRANSACTION
 
-      Before touching Firebase Auth we verify:
+      The token is permanently consumed
+      BEFORE Firebase changes the password.
 
-      - reset request exists
-      - request has not been used
-      - request is ready
-      - token is valid
-      - token is not expired
-      - recovery mode is valid
-      - minors received guardian approval
-      - student exists
-      - account is active
-      - Firebase UID matches student record
-
-      Then we temporarily lock the request.
-      ------------------------------------------------
+      If anything fails afterward, this
+      token can never be used again.
     */
 
     await adminDb.runTransaction(
@@ -288,10 +217,6 @@ export async function POST(request) {
         const reset =
           resetSnapshot.data();
 
-        /*
-          Already consumed.
-        */
-
         if (
           reset.status ===
           "completed"
@@ -302,38 +227,24 @@ export async function POST(request) {
         }
 
         /*
-          Handle an existing processing lock.
+          processing means another request
+          already consumed this token.
 
-          A fresh lock blocks a concurrent
-          request.
-
-          A stale lock older than 5 minutes
-          may be recovered.
+          Never reopen it.
         */
 
         if (
           reset.status ===
-          "processing"
+            "processing" ||
+          reset.status ===
+            "failed"
         ) {
-          const processingStartedAt =
-            getDate(
-              reset.processingStartedAt
-            );
+          throw new Error(
+            "RESET_ALREADY_USED"
+          );
+        }
 
-          const lockExpired =
-            !processingStartedAt ||
-            Date.now() -
-              processingStartedAt.getTime() >=
-              PROCESSING_LOCK_MINUTES *
-                60 *
-                1000;
-
-          if (!lockExpired) {
-            throw new Error(
-              "RESET_PROCESSING"
-            );
-          }
-        } else if (
+        if (
           reset.status !==
           "ready_for_reset"
         ) {
@@ -381,7 +292,7 @@ export async function POST(request) {
         }
 
         /*
-          Validate token expiry.
+          Check expiry.
         */
 
         const resetExpiry =
@@ -400,9 +311,7 @@ export async function POST(request) {
         }
 
         /*
-          Validate one-time token.
-
-          Firestore contains only the hash.
+          Check reset token.
         */
 
         const providedTokenHash =
@@ -439,12 +348,6 @@ export async function POST(request) {
             )
             .doc(studentId);
 
-        /*
-          Firestore transactions require
-          reads before writes, so student
-          validation happens before locking.
-        */
-
         const studentSnapshot =
           await transaction.get(
             studentReference
@@ -461,6 +364,11 @@ export async function POST(request) {
         const student =
           studentSnapshot.data();
 
+        /*
+          Only active student accounts
+          can reset passwords.
+        */
+
         if (
           student.role !== "student" ||
           student.accountStatus !==
@@ -472,12 +380,12 @@ export async function POST(request) {
         }
 
         /*
-          Make sure the reset request belongs
-          to the same Firebase account.
+          Verify Firebase UID consistency.
         */
 
         if (
-          student.firebaseUid &&
+          typeof student.firebaseUid ===
+            "string" &&
           student.firebaseUid !==
             studentId
         ) {
@@ -485,6 +393,10 @@ export async function POST(request) {
             "ACCOUNT_MISMATCH"
           );
         }
+
+        /*
+          Verify Youth ID consistency.
+        */
 
         if (
           reset.youthId &&
@@ -498,9 +410,10 @@ export async function POST(request) {
         }
 
         /*
-          Lock this reset request so the
-          same token cannot be processed
-          concurrently.
+          CONSUME TOKEN NOW.
+
+          From this point forward this
+          authorization can never be reused.
         */
 
         transaction.update(
@@ -509,13 +422,17 @@ export async function POST(request) {
             status:
               "processing",
 
+            resetTokenHash:
+              null,
+
+            resetExpiresAt:
+              null,
+
+            tokenConsumedAt:
+              FieldValue.serverTimestamp(),
+
             processingOperationId:
               operationId,
-
-            processingStartedAt:
-              Timestamp.fromDate(
-                new Date()
-              ),
 
             updatedAt:
               FieldValue.serverTimestamp(),
@@ -525,13 +442,9 @@ export async function POST(request) {
     );
 
     /*
-      ------------------------------------------------
-      FIREBASE AUTH
+      Change password through Firebase Auth.
 
-      Firebase Admin changes the password.
-
-      No password is stored in Firestore.
-      ------------------------------------------------
+      Password is NEVER written to Firestore.
     */
 
     try {
@@ -543,11 +456,10 @@ export async function POST(request) {
       );
 
       /*
-        Revoke existing refresh tokens after
-        a successful password reset.
+        Kill existing Firebase sessions.
 
-        This prevents old authenticated
-        sessions from continuing indefinitely.
+        User must authenticate again using
+        the new password.
       */
 
       await adminAuth.revokeRefreshTokens(
@@ -560,88 +472,118 @@ export async function POST(request) {
           authError?.message
       );
 
-      await releaseProcessingLock(
-        resetReference,
-        operationId
-      );
+      /*
+        FAIL CLOSED.
+
+        Do NOT restore resetTokenHash.
+
+        User must request another reset
+        link if Firebase failed.
+      */
+
+      try {
+        await resetReference.update({
+          status:
+            "failed",
+
+          failureStage:
+            "firebase_auth",
+
+          failedAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        });
+      } catch (firestoreError) {
+        console.error(
+          "Could not record password reset failure:",
+          firestoreError?.message
+        );
+      }
 
       return errorResponse(
-        "Password could not be updated. Please try again.",
+        "Password could not be updated. Please request a new password reset email and try again.",
         500
       );
     }
 
     /*
-      ------------------------------------------------
-      FINALIZE
+      Finalize Firestore record.
 
-      Destroy the reset token after the
-      Firebase password has changed.
-      ------------------------------------------------
+      The password has already changed and
+      the token has already been destroyed.
     */
 
-    await adminDb.runTransaction(
-      async (transaction) => {
-        const resetSnapshot =
-          await transaction.get(
-            resetReference
-          );
+    try {
+      await adminDb.runTransaction(
+        async (transaction) => {
+          const resetSnapshot =
+            await transaction.get(
+              resetReference
+            );
 
-        if (
-          !resetSnapshot.exists
-        ) {
-          throw new Error(
-            "FINALIZATION_FAILED"
-          );
-        }
-
-        const reset =
-          resetSnapshot.data();
-
-        if (
-          reset.status !==
-            "processing" ||
-          reset.processingOperationId !==
-            operationId
-        ) {
-          throw new Error(
-            "FINALIZATION_FAILED"
-          );
-        }
-
-        transaction.update(
-          resetReference,
-          {
-            status:
-              "completed",
-
-            usedAt:
-              FieldValue.serverTimestamp(),
-
-            resetTokenHash:
-              null,
-
-            resetExpiresAt:
-              null,
-
-            processingOperationId:
-              FieldValue.delete(),
-
-            processingStartedAt:
-              FieldValue.delete(),
-
-            updatedAt:
-              FieldValue.serverTimestamp(),
+          if (
+            !resetSnapshot.exists
+          ) {
+            throw new Error(
+              "FINALIZATION_FAILED"
+            );
           }
-        );
-      }
-    );
+
+          const reset =
+            resetSnapshot.data();
+
+          if (
+            reset.status !==
+              "processing" ||
+            reset.processingOperationId !==
+              operationId
+          ) {
+            throw new Error(
+              "FINALIZATION_FAILED"
+            );
+          }
+
+          transaction.update(
+            resetReference,
+            {
+              status:
+                "completed",
+
+              usedAt:
+                FieldValue.serverTimestamp(),
+
+              processingOperationId:
+                FieldValue.delete(),
+
+              updatedAt:
+                FieldValue.serverTimestamp(),
+            }
+          );
+        }
+      );
+    } catch (finalizationError) {
+      /*
+        Password change already succeeded.
+
+        Never tell the user to reuse this
+        link because the token was consumed.
+
+        Log the metadata failure instead.
+      */
+
+      console.error(
+        "Password reset finalization error:",
+        finalizationError?.message
+      );
+    }
 
     return Response.json({
       success: true,
 
       message:
-        "Password updated successfully.",
+        "Password updated successfully. Please sign in again using your new password.",
     });
   } catch (error) {
     const errorCode =
@@ -662,17 +604,7 @@ export async function POST(request) {
       "RESET_ALREADY_USED"
     ) {
       return errorResponse(
-        "This password reset link has already been used.",
-        409
-      );
-    }
-
-    if (
-      errorCode ===
-      "RESET_PROCESSING"
-    ) {
-      return errorResponse(
-        "This password reset is already being processed.",
+        "This password reset link has already been used. Please request a new one.",
         409
       );
     }
@@ -749,23 +681,13 @@ export async function POST(request) {
       );
     }
 
-    /*
-      At this point Firebase may already
-      have changed the password, so we do
-      not automatically unlock a failed
-      finalization.
-
-      The stale-lock recovery above protects
-      against permanent lockout.
-    */
-
     console.error(
       "Complete password reset error:",
       error?.message
     );
 
     return errorResponse(
-      "Password could not be updated. Please try again.",
+      "Password could not be updated.",
       500
     );
   }

@@ -28,7 +28,12 @@ export default function ForgotPasswordPage() {
     event.preventDefault();
 
     try {
-      if (!youthId.trim()) {
+      const cleanedYouthId =
+        youthId
+          .trim()
+          .toUpperCase();
+
+      if (!cleanedYouthId) {
         setErrorMessage(
           "Youth Initiative ID is required."
         );
@@ -52,7 +57,7 @@ export default function ForgotPasswordPage() {
 
             body: JSON.stringify({
               youthId:
-                youthId.trim(),
+                cleanedYouthId,
             }),
           }
         );
@@ -62,21 +67,18 @@ export default function ForgotPasswordPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.message
+          data.message ||
+            "Password recovery could not be started."
         );
       }
 
-      sessionStorage.setItem(
-        "passwordResetRequest",
-        JSON.stringify({
-          requestId:
-            data.requestId,
-          youthId:
-            youthId
-              .trim()
-              .toUpperCase(),
-        })
-      );
+      /*
+        Do not store requestId here.
+
+        The secure backend intentionally
+        does not reveal whether an account
+        exists or return recovery details.
+      */
 
       router.push(
         "/reset-request-sent"
@@ -84,7 +86,7 @@ export default function ForgotPasswordPage() {
     } catch (error) {
       setErrorMessage(
         error.message ||
-          "Password reset could not be started."
+          "Password recovery could not be started."
       );
     } finally {
       setLoading(false);
@@ -93,9 +95,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <main className="password-flow-page">
-
       <section className="password-flow-card">
-
         <Link
           href="/login"
           className="password-flow-back"
@@ -118,28 +118,28 @@ export default function ForgotPasswordPage() {
 
         <p>
           Enter your Youth Initiative ID.
-          We&apos;ll send a verification link
-          to the registered parent or guardian
-          email.
+          If the account is eligible for
+          recovery, we&apos;ll send a secure
+          recovery link to the appropriate
+          registered email.
         </p>
-
 
         <div className="password-security-note">
           <ShieldCheck size={20} />
 
           <span>
-            Parent or guardian verification
-            is required before your password
-            can be changed.
+            Students under 18 require parent
+            or guardian approval. Students
+            18 or older receive the recovery
+            link at their registered contact
+            email.
           </span>
         </div>
-
 
         <form
           onSubmit={handleSubmit}
           className="password-flow-form"
         >
-
           <label>
             Youth Initiative ID
 
@@ -162,13 +162,11 @@ export default function ForgotPasswordPage() {
             />
           </label>
 
-
           {errorMessage && (
             <div className="password-flow-error">
               {errorMessage}
             </div>
           )}
-
 
           <button
             type="submit"
@@ -186,15 +184,12 @@ export default function ForgotPasswordPage() {
             ) : (
               <>
                 <Mail size={18} />
-                Send Verification Email
+                Send Recovery Email
               </>
             )}
           </button>
-
         </form>
-
       </section>
-
     </main>
   );
 }

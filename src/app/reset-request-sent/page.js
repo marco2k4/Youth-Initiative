@@ -8,9 +8,7 @@ import {
 export default function ResetRequestSentPage() {
   return (
     <main className="password-flow-page">
-
       <section className="password-flow-card password-sent-card">
-
         <div className="password-email-icon">
           <Mail size={36} />
         </div>
@@ -21,7 +19,7 @@ export default function ResetRequestSentPage() {
         />
 
         <span className="password-flow-label">
-          EMAIL SENT
+          REQUEST RECEIVED
         </span>
 
         <h1>
@@ -29,17 +27,18 @@ export default function ResetRequestSentPage() {
         </h1>
 
         <p>
-          We sent a secure parent or guardian
-          verification link to the email
-          associated with the student account.
+          If the Youth Initiative ID is valid
+          and eligible for password recovery,
+          a secure recovery email will be sent
+          to the appropriate registered email
+          address.
         </p>
 
-
         <div className="password-security-note">
-          The verification link expires in
-          30 minutes.
+          Recovery links expire in 30 minutes.
+          Check your inbox and spam folder
+          before requesting another link.
         </div>
-
 
         <Link
           href="/login"
@@ -47,9 +46,7 @@ export default function ResetRequestSentPage() {
         >
           Return to Login
         </Link>
-
       </section>
-
     </main>
   );
 }
