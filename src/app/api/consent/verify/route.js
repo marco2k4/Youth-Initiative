@@ -2,6 +2,11 @@ import crypto from "crypto";
 
 import { adminDb } from "@/services/firebaseAdmin";
 
+import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
+
 export const runtime = "nodejs";
 
 function hashToken(token) {
@@ -43,6 +48,7 @@ function hashesMatch(
 
 export async function POST(request) {
   try {
+    await requireAppCheck(request);
     const {
       registrationId,
       token,
@@ -219,6 +225,13 @@ export async function POST(request) {
       },
     });
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(error);
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
+    
     console.error(
       "Consent verification error:",
       error

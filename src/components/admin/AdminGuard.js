@@ -23,6 +23,10 @@ import {
   auth,
 } from "@/services/firebase";
 
+import {
+  adminFetch,
+} from "@/services/adminApi";
+
 export default function AdminGuard({
   children,
 }) {
@@ -32,27 +36,37 @@ export default function AdminGuard({
   const pathname =
     usePathname();
 
-  const [verified, setVerified] =
-    useState(false);
+  const [
+    verified,
+    setVerified,
+  ] = useState(false);
 
-  const [checking, setChecking] =
-    useState(true);
+  const [
+    checking,
+    setChecking,
+  ] = useState(true);
 
   useEffect(() => {
     if (
-      pathname === "/admin/login"
+      pathname ===
+      "/admin/login"
     ) {
       setVerified(true);
       setChecking(false);
+
       return;
     }
 
     const unsubscribe =
       onAuthStateChanged(
         auth,
-        async (firebaseUser) => {
+        async (
+          firebaseUser
+        ) => {
           try {
-            if (!firebaseUser) {
+            if (
+              !firebaseUser
+            ) {
               router.replace(
                 "/admin/login"
               );
@@ -60,24 +74,26 @@ export default function AdminGuard({
               return;
             }
 
-            const token =
-              await firebaseUser.getIdToken();
+            /*
+              adminFetch sends both:
+              - Firebase Auth token
+              - Firebase App Check token
+            */
 
             const response =
-              await fetch(
+              await adminFetch(
                 "/api/admin/auth/verify",
                 {
                   method: "POST",
-
-                  headers: {
-                    Authorization:
-                      `Bearer ${token}`,
-                  },
                 }
               );
 
-            if (!response.ok) {
-              await signOut(auth);
+            if (
+              !response.ok
+            ) {
+              await signOut(
+                auth
+              );
 
               router.replace(
                 "/admin/login"
@@ -86,18 +102,30 @@ export default function AdminGuard({
               return;
             }
 
-            setVerified(true);
+            setVerified(
+              true
+            );
           } catch (error) {
             console.error(
               "Admin guard error:",
-              error
+              error?.message
             );
+
+            try {
+              await signOut(
+                auth
+              );
+            } catch {
+              // Ignore sign-out failure.
+            }
 
             router.replace(
               "/admin/login"
             );
           } finally {
-            setChecking(false);
+            setChecking(
+              false
+            );
           }
         }
       );
@@ -109,7 +137,8 @@ export default function AdminGuard({
   ]);
 
   if (
-    pathname === "/admin/login"
+    pathname ===
+    "/admin/login"
   ) {
     return children;
   }

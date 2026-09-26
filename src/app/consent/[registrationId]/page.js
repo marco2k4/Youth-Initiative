@@ -7,6 +7,9 @@ import {
   useSearchParams,
 } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
 
 import {
   LoaderCircle,
@@ -56,7 +59,7 @@ export default function ConsentPage() {
           );
         }
 
-        const response = await fetch(
+        const response = await appCheckFetch(
           "/api/consent/verify",
           {
             method: "POST",
@@ -68,7 +71,12 @@ export default function ConsentPage() {
             body: JSON.stringify({
               registrationId,
               token,
+              guardianConfirmed,
+              termsAccepted,
             }),
+          },
+          {
+            limitedUse: true,
           }
         );
 

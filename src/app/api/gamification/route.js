@@ -3,6 +3,11 @@ import {
   adminDb,
 } from "@/services/firebaseAdmin";
 
+import {
+  requireActiveStudent,
+  studentAccessResponse,
+} from "@/services/studentAccess";
+
 export const runtime = "nodejs";
 
 async function getStudentId(request) {
@@ -197,8 +202,12 @@ function createQuestData({
 
 export async function GET(request) {
   try {
-    const studentId =
-      await getStudentId(request);
+    const {
+      uid: studentId,
+    } =
+      await requireActiveStudent(
+        request
+      );
 
     const studentSnapshot =
       await adminDb
@@ -420,6 +429,15 @@ export async function GET(request) {
       },
     });
   } catch (error) {
+    const accessResponse =
+      studentAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
     console.error(
       "Gamification API error:",
       error

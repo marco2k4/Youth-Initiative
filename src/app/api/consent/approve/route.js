@@ -4,6 +4,10 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/services/firebaseAdmin";
 
+import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
 export const runtime = "nodejs";
 
 const CONSENT_TERMS_VERSION =
@@ -63,6 +67,12 @@ function createRequestError(
 
 export async function POST(request) {
   try {
+    await requireAppCheck(
+      request,
+      {
+        consume: true,
+      }
+    );
     const {
       registrationId,
       token,
@@ -290,6 +300,13 @@ export async function POST(request) {
       activationToken,
     });
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(error);
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
+
     console.error(
       "Consent approval error:",
       error

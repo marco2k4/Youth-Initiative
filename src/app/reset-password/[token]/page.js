@@ -20,6 +20,10 @@ import {
   LockKeyhole,
 } from "lucide-react";
 
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
+
 export default function ResetPasswordPage() {
   const params =
     useParams();
@@ -107,7 +111,7 @@ export default function ResetPasswordPage() {
       setErrorMessage("");
 
       const response =
-        await fetch(
+        await appCheckFetch(
           "/api/password-reset/complete",
           {
             method: "POST",
@@ -124,6 +128,9 @@ export default function ResetPasswordPage() {
                 password,
                 confirmPassword,
               }),
+          },
+          {
+            limitedUse: true,
           }
         );
 

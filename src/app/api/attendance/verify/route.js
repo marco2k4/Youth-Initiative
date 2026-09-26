@@ -11,6 +11,11 @@ import {
   processWorkshopCompletion,
 } from "@/services/gamificationAdmin";
 
+import {
+  requireActiveStudent,
+  studentAccessResponse,
+} from "@/services/studentAccess";
+
 export const runtime = "nodejs";
 
 async function getStudent(request) {
@@ -45,8 +50,16 @@ async function getStudent(request) {
 
 export async function POST(request) {
   try {
-    const studentId =
-      await getStudent(request);
+    const {
+      uid: studentId,
+    } =
+      await requireActiveStudent(
+        request,
+        {
+          consumeAppCheck:
+            true,
+        }
+      );
 
     const {
       attendanceSessionId,
@@ -275,6 +288,15 @@ export async function POST(request) {
       reward,
     });
   } catch (error) {
+    const accessResponse =
+      studentAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+    
     console.error(
       "Attendance verification error:",
       error

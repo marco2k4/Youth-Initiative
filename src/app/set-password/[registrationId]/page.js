@@ -3,6 +3,9 @@
 import Image from "next/image";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
 
 import {
   Check,
@@ -68,7 +71,7 @@ export default function SetPasswordPage() {
       setSubmitting(true);
       setErrorMessage("");
 
-      const response = await fetch(
+      const response = await appCheckFetch(
         "/api/account/activate",
         {
           method: "POST",
@@ -83,6 +86,9 @@ export default function SetPasswordPage() {
             password,
             confirmPassword,
           }),
+        },
+        {
+          limitedUse: true,
         }
       );
 

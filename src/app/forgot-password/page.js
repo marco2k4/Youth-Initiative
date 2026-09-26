@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
 
 import {
   ArrowLeft,
@@ -45,7 +48,7 @@ export default function ForgotPasswordPage() {
       setErrorMessage("");
 
       const response =
-        await fetch(
+        await appCheckFetch(
           "/api/password-reset/request",
           {
             method: "POST",

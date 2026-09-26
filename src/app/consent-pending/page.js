@@ -14,6 +14,10 @@ import {
   RefreshCw,
 } from "lucide-react";
 
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
+
 export default function ConsentPendingPage() {
   const [
     registration,
@@ -81,7 +85,7 @@ export default function ConsentPendingPage() {
       setResendMessage("");
 
       const response =
-        await fetch(
+        await appCheckFetch(
           "/api/consent/resend",
           {
             method: "POST",

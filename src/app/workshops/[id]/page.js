@@ -20,6 +20,10 @@ import {
 
 import { getWorkshopImage } from "@/utils/getWorkshopImage";
 
+import {
+  studentFetch,
+} from "@/services/studentApi";
+
 export default function WorkshopDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -32,8 +36,8 @@ export default function WorkshopDetailsPage() {
   useEffect(() => {
     async function loadWorkshop() {
       try {
-        const response = await fetch(
-          `/api/workshops/${params.id}`
+        const response = await studentFetch(
+          `/api/workshops/${encodeURIComponent(params.id)}`
         );
 
         const responseData = await response.json();

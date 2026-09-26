@@ -19,6 +19,10 @@ import {
 
 import WorkshopCard from "@/components/workshops/WorkshopCard";
 
+import {
+  studentFetch,
+} from "@/services/studentApi";
+
 export default function WorkshopsPage() {
   const [workshops, setWorkshops] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +46,7 @@ export default function WorkshopsPage() {
       try {
         setLoading(true);
 
-        const response = await fetch("/api/workshops");
+        const response = await studentFetch("/api/workshops");
         const responseData = await response.json();
 
         if (!response.ok) {

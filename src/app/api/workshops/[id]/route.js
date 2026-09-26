@@ -1,21 +1,62 @@
-import { adminDb } from "@/services/firebaseAdmin";
+import {
+  adminDb,
+} from "@/services/firebaseAdmin";
+
+import {
+  requireActiveStudent,
+  studentAccessResponse,
+} from "@/services/studentAccess";
 
 export const runtime = "nodejs";
 
-export async function GET(request, context) {
+export async function GET(
+  request,
+  context
+) {
   try {
-    const { id } = await context.params;
+    await requireActiveStudent(
+      request
+    );
 
-    const workshopSnapshot = await adminDb
-      .collection("workshops")
-      .doc(id)
-      .get();
+    const {
+      id,
+    } =
+      await context.params;
 
-    if (!workshopSnapshot.exists) {
+    if (
+      typeof id !== "string" ||
+      !id.trim()
+    ) {
       return Response.json(
         {
           success: false,
-          message: "Workshop not found.",
+
+          message:
+            "Workshop ID is required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const workshopSnapshot =
+      await adminDb
+        .collection(
+          "workshops"
+        )
+        .doc(id.trim())
+        .get();
+
+    if (
+      !workshopSnapshot.exists
+    ) {
+      return Response.json(
+        {
+          success: false,
+
+          message:
+            "Workshop not found.",
         },
         {
           status: 404,
@@ -24,15 +65,22 @@ export async function GET(request, context) {
     }
 
     const workshop = {
-      id: workshopSnapshot.id,
+      id:
+        workshopSnapshot.id,
+
       ...workshopSnapshot.data(),
     };
 
-    if (workshop.status !== "active") {
+    if (
+      workshop.status !==
+      "active"
+    ) {
       return Response.json(
         {
           success: false,
-          message: "This workshop is currently unavailable.",
+
+          message:
+            "This workshop is currently unavailable.",
         },
         {
           status: 404,
@@ -45,12 +93,26 @@ export async function GET(request, context) {
       workshop,
     });
   } catch (error) {
-    console.error("Load workshop details error:", error);
+    const accessResponse =
+      studentAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
+    console.error(
+      "Load workshop details error:",
+      error?.message
+    );
 
     return Response.json(
       {
         success: false,
-        message: "Workshop details could not be loaded.",
+
+        message:
+          "Workshop details could not be loaded.",
       },
       {
         status: 500,

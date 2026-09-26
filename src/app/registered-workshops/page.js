@@ -25,6 +25,10 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { getWorkshopImage } from "@/utils/getWorkshopImage";
 
+import {
+  studentFetch,
+} from "@/services/studentApi";
+
 export default function RegisteredWorkshopsPage() {
   const {
     user,
@@ -50,17 +54,8 @@ export default function RegisteredWorkshopsPage() {
           return;
         }
 
-        const idToken =
-          await user.getIdToken();
-
-        const response = await fetch(
-          "/api/registrations",
-          {
-            headers: {
-              Authorization:
-                `Bearer ${idToken}`,
-            },
-          }
+        const response = await studentFetch(
+          "/api/registrations"
         );
 
         const responseData =

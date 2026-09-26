@@ -6,16 +6,17 @@ import {
   appCheckFetch,
 } from "@/services/appCheckApi";
 
-export async function adminFetch(
+export async function studentFetch(
   url,
-  options = {}
+  options = {},
+  securityOptions = {}
 ) {
   const user =
     auth.currentUser;
 
   if (!user) {
     throw new Error(
-      "Admin session unavailable."
+      "Student session unavailable."
     );
   }
 
@@ -32,16 +33,12 @@ export async function adminFetch(
     `Bearer ${authToken}`
   );
 
-  /*
-    appCheckFetch adds:
-    X-Firebase-AppCheck
-  */
-
   return appCheckFetch(
     url,
     {
       ...options,
       headers,
-    }
+    },
+    securityOptions
   );
 }

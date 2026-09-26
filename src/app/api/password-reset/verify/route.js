@@ -6,6 +6,11 @@ import {
 } from "firebase-admin/firestore";
 
 import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
+
+import {
   adminDb,
 } from "@/services/firebaseAdmin";
 
@@ -98,6 +103,21 @@ export async function POST(request) {
       token,
       approve,
     } = await request.json();
+
+    /*
+      Checking the link uses a normal token.
+
+      Actually approving the reset consumes
+      a limited-use App Check token.
+    */
+
+    await requireAppCheck(
+      request,
+      {
+        consume:
+          approve === true,
+      }
+    );
 
     if (
       typeof requestId !== "string" ||
@@ -400,6 +420,15 @@ export async function POST(request) {
       resetToken,
     });
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(
+        error
+      );
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
+
     const errorCode =
       error?.message;
 

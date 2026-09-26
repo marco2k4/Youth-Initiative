@@ -21,6 +21,10 @@ import {
 
 import { useAuth } from "@/contexts/AuthContext";
 
+import {
+  studentFetch,
+} from "@/services/studentApi";
+
 export default function RegistrationSuccessPage() {
   const params = useParams();
   const router = useRouter();
@@ -93,7 +97,7 @@ export default function RegistrationSuccessPage() {
       const idToken =
         await user.getIdToken();
 
-      const response = await fetch(
+      const response = await studentFetch(
         "/api/registrations",
         {
           method: "POST",
@@ -101,9 +105,6 @@ export default function RegistrationSuccessPage() {
           headers: {
             "Content-Type":
               "application/json",
-
-            Authorization:
-              `Bearer ${idToken}`,
           },
 
           body: JSON.stringify({

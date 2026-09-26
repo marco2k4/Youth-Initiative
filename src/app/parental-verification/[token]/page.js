@@ -7,6 +7,10 @@ import {
 } from "next/navigation";
 
 import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
+
+import {
   useEffect,
   useState,
 } from "react";
@@ -108,7 +112,7 @@ export default function ParentalVerificationPage() {
       setApproving(true);
 
       const response =
-        await fetch(
+        await appCheckFetch(
           "/api/password-reset/verify",
           {
             method: "POST",
@@ -124,6 +128,9 @@ export default function ParentalVerificationPage() {
                 token,
                 approve: true,
               }),
+          },
+          {
+            limitedUse: true,
           }
         );
 

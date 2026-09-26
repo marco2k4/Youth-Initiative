@@ -5,6 +5,11 @@ import {
   adminDb,
 } from "@/services/firebaseAdmin";
 
+import {
+  requireActiveStudent,
+  studentAccessResponse,
+} from "@/services/studentAccess";
+
 export const runtime = "nodejs";
 
 async function getAuthenticatedStudent(request) {
@@ -44,7 +49,7 @@ async function getAuthenticatedStudent(request) {
 export async function GET(request) {
   try {
     const { uid } =
-      await getAuthenticatedStudent(request);
+      await requireActiveStudent(request);
 
     const registrationsSnapshot = await adminDb
       .collection("registrations")
@@ -81,6 +86,14 @@ export async function GET(request) {
       registrations,
     });
   } catch (error) {
+    const accessResponse =
+      studentAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
     console.error(
       "Get registrations error:",
       error
@@ -111,7 +124,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const { uid } =
-      await getAuthenticatedStudent(request);
+      await requireActiveStudent(request);
 
     const { workshopId } =
       await request.json();
@@ -224,6 +237,15 @@ export async function POST(request) {
       }
     );
   } catch (error) {
+    const accessResponse =
+      studentAccessResponse(
+        error
+      );
+
+    if (accessResponse) {
+      return accessResponse;
+    }
+
     console.error(
       "Create registration error:",
       error

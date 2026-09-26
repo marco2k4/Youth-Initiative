@@ -7,6 +7,11 @@ import {
   adminDb,
 } from "@/services/firebaseAdmin";
 
+import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
+
 export const runtime = "nodejs";
 
 const YOUTH_ID_ALPHABET =
@@ -211,6 +216,12 @@ export async function POST(request) {
   let activationClaimed = false;
 
   try {
+    await requireAppCheck(
+      request,
+      {
+        consume: true,
+      }
+    );
     const {
       registrationId,
       token,
@@ -625,6 +636,13 @@ export async function POST(request) {
       }
     );
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(error);
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
+
     console.error(
       "Account activation error:",
       error

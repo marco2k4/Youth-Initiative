@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  studentFetch,
+} from "@/services/studentApi";
+
+import {
   Award,
   BookOpen,
   CalendarDays,
@@ -37,13 +41,10 @@ export default function CompletedWorkshopsPage() {
           return;
         }
 
-        const idToken = await user.getIdToken();
-
-        const response = await fetch("/api/registrations", {
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-          },
-        });
+        const response = 
+          await studentFetch(
+            "/api/registrations"
+          );
 
         const data = await response.json();
 

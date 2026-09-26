@@ -5,6 +5,11 @@ import { Resend } from "resend";
 
 import { adminDb } from "@/services/firebaseAdmin";
 
+import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
+
 export const runtime = "nodejs";
 
 const resend = new Resend(
@@ -89,6 +94,7 @@ function escapeHtml(value) {
 
 export async function POST(request) {
   try {
+    await requireAppCheck(request);
     const {
       registrationId,
       resendToken,
@@ -495,6 +501,12 @@ export async function POST(request) {
         "A new parental consent email has been sent.",
     });
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(error);
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
     console.error(
       "Consent resend error:",
       error

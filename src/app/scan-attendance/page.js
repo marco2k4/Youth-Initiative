@@ -25,6 +25,10 @@ import {
   useAuth,
 } from "@/contexts/AuthContext";
 
+import {
+  studentFetch,
+} from "@/services/studentApi";
+
 export default function ScanAttendancePage() {
   const router = useRouter();
 
@@ -72,11 +76,8 @@ export default function ScanAttendancePage() {
         );
       }
 
-      const idToken =
-        await user.getIdToken();
-
       const response =
-        await fetch(
+        await studentFetch(
           "/api/attendance/verify",
           {
             method: "POST",
@@ -84,15 +85,15 @@ export default function ScanAttendancePage() {
             headers: {
               "Content-Type":
                 "application/json",
-
-              Authorization:
-                `Bearer ${idToken}`,
             },
 
             body:
               JSON.stringify(
                 qrData
               ),
+          },
+          {
+            limitedUse: true,
           }
         );
 

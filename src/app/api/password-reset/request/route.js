@@ -9,6 +9,11 @@ import { Resend } from "resend";
 
 import { adminDb } from "@/services/firebaseAdmin";
 
+import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
+
 export const runtime = "nodejs";
 
 const resend = new Resend(
@@ -293,6 +298,10 @@ async function checkRateLimit(
 
 export async function POST(request) {
   try {
+    await requireAppCheck(
+      request
+    );
+
     const {
       youthId,
     } = await request.json();
@@ -766,6 +775,15 @@ export async function POST(request) {
 
     return genericResponse();
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(
+        error
+      );
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
+
     console.error(
       "Password reset request error:",
       error?.message

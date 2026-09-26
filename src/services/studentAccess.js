@@ -7,22 +7,28 @@ import {
   requireAppCheck,
 } from "@/services/appCheckServer";
 
-export async function requireActiveAdmin(
-  request
+export async function requireActiveStudent(
+  request,
+  options = {}
 ) {
+  const {
+    consumeAppCheck = false,
+  } = options;
+
   /*
-    Layer 1:
-    verify that the request came from
-    our registered application.
+    1. Verify App Check
   */
 
   await requireAppCheck(
-    request
+    request,
+    {
+      consume:
+        consumeAppCheck,
+    }
   );
 
   /*
-    Layer 2:
-    verify Firebase Authentication.
+    2. Verify Firebase Authentication
   */
 
   const authorization =
@@ -42,7 +48,6 @@ export async function requireActiveAdmin(
       );
 
     error.status = 401;
-
     throw error;
   }
 
@@ -58,7 +63,6 @@ export async function requireActiveAdmin(
       );
 
     error.status = 401;
-
     throw error;
   }
 
@@ -73,59 +77,97 @@ export async function requireActiveAdmin(
   } catch {
     const error =
       new Error(
-        "Administrator session is invalid or expired."
+        "Student session is invalid or expired."
       );
 
     error.status = 401;
-
     throw error;
   }
 
   /*
-    Layer 3:
-    verify administrator authorization
-    from Firestore.
+    3. Verify student profile
   */
 
-  const adminSnapshot =
+  const studentSnapshot =
     await adminDb
-      .collection(
-        "admins"
-      )
-      .doc(
-        decodedToken.uid
-      )
+      .collection("students")
+      .doc(decodedToken.uid)
       .get();
 
-  if (
-    !adminSnapshot.exists
-  ) {
+  if (!studentSnapshot.exists) {
     const error =
       new Error(
-        "Administrator access required."
+        "Student profile not found."
       );
 
-    error.status = 403;
-
+    error.status = 404;
     throw error;
   }
 
-  const adminData =
-    adminSnapshot.data();
+  const student =
+    studentSnapshot.data();
+
+  /*
+    Ensure Firestore UID and Firebase UID
+    represent the same account.
+  */
 
   if (
-    adminData.role !==
-      "admin" ||
-    adminData.status !==
+    student.firebaseUid &&
+    student.firebaseUid !==
+      decodedToken.uid
+  ) {
+    const error =
+      new Error(
+        "Student account information is invalid."
+      );
+
+    error.status = 403;
+    throw error;
+  }
+
+  if (
+    student.role !== "student"
+  ) {
+    const error =
+      new Error(
+        "Student access required."
+      );
+
+    error.status = 403;
+    throw error;
+  }
+
+  if (
+    student.accountStatus !==
       "active"
   ) {
     const error =
       new Error(
-        "Administrator access is inactive."
+        "This student account is inactive."
       );
 
     error.status = 403;
+    throw error;
+  }
 
+  /*
+    Minor accounts cannot use protected
+    student APIs without approved consent.
+  */
+
+  if (
+    student.requiresParentalConsent ===
+      true &&
+    student.consentStatus !==
+      "approved"
+  ) {
+    const error =
+      new Error(
+        "Parental consent is required."
+      );
+
+    error.status = 403;
     throw error;
   }
 
@@ -135,24 +177,23 @@ export async function requireActiveAdmin(
 
     email:
       decodedToken.email ||
-      adminData.email ||
       null,
 
-    adminData,
+    student,
   };
 }
 
-export function adminAccessResponse(
+export function studentAccessResponse(
   error
 ) {
   if (
     error?.status === 401 ||
-    error?.status === 403
+    error?.status === 403 ||
+    error?.status === 404
   ) {
     return Response.json(
       {
         success: false,
-
         message:
           error.message,
       },

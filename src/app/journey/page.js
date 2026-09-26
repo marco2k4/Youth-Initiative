@@ -30,6 +30,10 @@ import {
   useAuth,
 } from "@/contexts/AuthContext";
 
+import {
+  studentFetch,
+} from "@/services/studentApi";
+
 export default function JourneyPage() {
   const {
     user,
@@ -52,18 +56,9 @@ export default function JourneyPage() {
           return;
         }
 
-        const token =
-          await user.getIdToken();
-
         const response =
-          await fetch(
-            "/api/gamification",
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-              },
-            }
+          await studentFetch(
+            "/api/gamification"
           );
 
         const data =

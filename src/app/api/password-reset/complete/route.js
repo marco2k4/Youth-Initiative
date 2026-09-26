@@ -9,6 +9,11 @@ import {
   adminDb,
 } from "@/services/firebaseAdmin";
 
+import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
+
 export const runtime = "nodejs";
 
 function hashToken(token) {
@@ -130,6 +135,13 @@ export async function POST(request) {
   let studentId = null;
 
   try {
+    await requireAppCheck(
+      request,
+      {
+        consume: true,
+      }
+    );
+
     const {
       requestId,
       token,
@@ -586,6 +598,15 @@ export async function POST(request) {
         "Password updated successfully. Please sign in again using your new password.",
     });
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(
+        error
+      );
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
+    
     const errorCode =
       error?.message;
 

@@ -3,6 +3,10 @@ import crypto from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { Resend } from "resend";
 
+import {
+  appCheckErrorResponse,
+  requireAppCheck,
+} from "@/services/appCheckServer";
 import { adminDb } from "@/services/firebaseAdmin";
 import {
   calculateAge,
@@ -70,6 +74,7 @@ function maskEmail(email) {
 
 export async function POST(request) {
   try {
+    await requireAppCheck(request);
     const requestBody =
       await request.json();
 
@@ -589,6 +594,13 @@ export async function POST(request) {
       }
     );
   } catch (error) {
+    const appCheckResponse =
+      appCheckErrorResponse(error);
+
+    if (appCheckResponse) {
+      return appCheckResponse;
+    }
+    
     console.error(
       "Registration API error:",
       error
