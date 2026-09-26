@@ -136,9 +136,20 @@ export default function ParentalVerificationPage() {
         );
       }
 
+      if (
+        !data.resetToken ||
+        typeof data.resetToken !== "string"
+      ) {
+        throw new Error(
+          "Password reset authorization could not be created."
+        );
+      }
+
       router.push(
-        `/reset-password/${requestId}?token=${encodeURIComponent(
-          token
+        `/reset-password/${encodeURIComponent(
+          requestId
+        )}?token=${encodeURIComponent(
+          data.resetToken
         )}`
       );
     } catch (error) {
