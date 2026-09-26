@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   Award,
@@ -26,8 +31,17 @@ import {
   Zap,
 } from "lucide-react";
 
-import { useAuth } from "@/contexts/AuthContext";
-import { getWorkshopImage } from "@/utils/getWorkshopImage";
+import {
+  useAuth,
+} from "@/contexts/AuthContext";
+
+import {
+  studentFetch,
+} from "@/services/studentApi";
+
+import {
+  getWorkshopImage,
+} from "@/utils/getWorkshopImage";
 
 export default function DashboardPage() {
   const {
@@ -36,12 +50,30 @@ export default function DashboardPage() {
     loading: authLoading,
   } = useAuth();
 
-  const [gameData, setGameData] = useState(null);
-  const [registrations, setRegistrations] = useState([]);
-  const [workshops, setWorkshops] = useState([]);
+  const [
+    gameData,
+    setGameData,
+  ] = useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [
+    registrations,
+    setRegistrations,
+  ] = useState([]);
+
+  const [
+    workshops,
+    setWorkshops,
+  ] = useState([]);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
@@ -53,26 +85,32 @@ export default function DashboardPage() {
         setLoading(true);
         setErrorMessage("");
 
-        const token = await user.getIdToken();
+        /*
+          studentFetch automatically adds:
+
+          Authorization:
+          Bearer <Firebase ID token>
+
+          X-Firebase-AppCheck:
+          <App Check token>
+        */
 
         const [
           gameResponse,
           registrationResponse,
           workshopResponse,
         ] = await Promise.all([
-          fetch("/api/gamification", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
+          studentFetch(
+            "/api/gamification"
+          ),
 
-          fetch("/api/registrations", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
+          studentFetch(
+            "/api/registrations"
+          ),
 
-          fetch("/api/workshops"),
+          studentFetch(
+            "/api/workshops"
+          ),
         ]);
 
         const gameResult =
@@ -91,28 +129,36 @@ export default function DashboardPage() {
           );
         }
 
-        if (!registrationResponse.ok) {
+        if (
+          !registrationResponse.ok
+        ) {
           throw new Error(
             registrationResult.message ||
               "Could not load your registrations."
           );
         }
 
-        if (!workshopResponse.ok) {
+        if (
+          !workshopResponse.ok
+        ) {
           throw new Error(
             workshopResult.message ||
               "Could not load workshops."
           );
         }
 
-        setGameData(gameResult.gamification);
+        setGameData(
+          gameResult.gamification
+        );
 
         setRegistrations(
-          registrationResult.registrations || []
+          registrationResult.registrations ||
+            []
         );
 
         setWorkshops(
-          workshopResult.workshops || []
+          workshopResult.workshops ||
+            []
         );
       } catch (error) {
         console.error(
@@ -136,101 +182,137 @@ export default function DashboardPage() {
         setLoading(false);
       }
     }
-  }, [user, authLoading]);
+  }, [
+    user,
+    authLoading,
+  ]);
 
   const upcomingRegistrations =
     useMemo(() => {
       return registrations.filter(
         (registration) =>
-          registration.status !== "completed" &&
+          registration.status !==
+            "completed" &&
           registration.workshop
       );
-    }, [registrations]);
+    }, [
+      registrations,
+    ]);
 
   const nextWorkshop =
-    upcomingRegistrations[0] || null;
+    upcomingRegistrations[0] ||
+    null;
 
-  const activeQuest = useMemo(() => {
-    if (!gameData?.quests) {
-      return null;
-    }
+  const activeQuest =
+    useMemo(() => {
+      if (
+        !gameData?.quests
+      ) {
+        return null;
+      }
 
-    return (
-      gameData.quests.find(
-        (quest) => !quest.completed
-      ) ||
-      gameData.quests[
-        gameData.quests.length - 1
-      ]
-    );
-  }, [gameData]);
+      return (
+        gameData.quests.find(
+          (quest) =>
+            !quest.completed
+        ) ||
+        gameData.quests[
+          gameData.quests.length -
+            1
+        ]
+      );
+    }, [
+      gameData,
+    ]);
 
   const recommendedWorkshops =
     useMemo(() => {
-      const registeredIds = new Set(
-        registrations.map(
-          (registration) =>
-            registration.workshopId
-        )
-      );
+      const registeredIds =
+        new Set(
+          registrations.map(
+            (registration) =>
+              registration.workshopId
+          )
+        );
 
       const interests =
-        student?.interests || [];
+        student?.interests ||
+        [];
 
       const normalizedInterests =
-        interests.map((interest) =>
-          String(interest).toLowerCase()
+        interests.map(
+          (interest) =>
+            String(
+              interest
+            ).toLowerCase()
         );
 
-      const scored = workshops
-        .filter(
-          (workshop) =>
-            !registeredIds.has(workshop.id)
-        )
-        .map((workshop) => {
-          const searchableText = [
-            workshop.title,
-            workshop.category,
-            workshop.programArea,
-            workshop.description,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
+      const scored =
+        workshops
+          .filter(
+            (workshop) =>
+              !registeredIds.has(
+                workshop.id
+              )
+          )
+          .map(
+            (workshop) => {
+              const searchableText =
+                [
+                  workshop.title,
+                  workshop.category,
+                  workshop.programArea,
+                  workshop.description,
+                ]
+                  .filter(
+                    Boolean
+                  )
+                  .join(" ")
+                  .toLowerCase();
 
-          let score = 0;
+              let score = 0;
 
-          normalizedInterests.forEach(
-            (interest) => {
-              if (
-                searchableText.includes(
+              normalizedInterests.forEach(
+                (
                   interest
-                )
-              ) {
-                score += 1;
-              }
+                ) => {
+                  if (
+                    searchableText.includes(
+                      interest
+                    )
+                  ) {
+                    score += 1;
+                  }
+                }
+              );
+
+              return {
+                ...workshop,
+                recommendationScore:
+                  score,
+              };
             }
+          )
+          .sort(
+            (a, b) =>
+              b.recommendationScore -
+              a.recommendationScore
           );
 
-          return {
-            ...workshop,
-            recommendationScore: score,
-          };
-        })
-        .sort(
-          (a, b) =>
-            b.recommendationScore -
-            a.recommendationScore
-        );
-
-      return scored.slice(0, 3);
+      return scored.slice(
+        0,
+        3
+      );
     }, [
       workshops,
       registrations,
       student,
     ]);
 
-  if (authLoading || loading) {
+  if (
+    authLoading ||
+    loading
+  ) {
     return (
       <main className="dashboard-state-page">
         <div className="dashboard-loading-orb">
@@ -240,11 +322,13 @@ export default function DashboardPage() {
           />
         </div>
 
-        <h2>Loading your journey...</h2>
+        <h2>
+          Loading your journey...
+        </h2>
 
         <p>
-          Getting your workshops, XP and
-          achievements ready.
+          Getting your workshops,
+          XP and achievements ready.
         </p>
       </main>
     );
@@ -253,11 +337,13 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <main className="dashboard-state-page">
-        <h1>Login Required</h1>
+        <h1>
+          Login Required
+        </h1>
 
         <p>
-          Log in to continue your Youth
-          Initiative journey.
+          Log in to continue your
+          Youth Initiative journey.
         </p>
 
         <Link href="/login">
@@ -267,7 +353,10 @@ export default function DashboardPage() {
     );
   }
 
-  if (!gameData || errorMessage) {
+  if (
+    !gameData ||
+    errorMessage
+  ) {
     return (
       <main className="dashboard-state-page">
         <h1>
@@ -283,7 +372,9 @@ export default function DashboardPage() {
 
   const firstName =
     student?.firstName ||
-    user?.displayName?.split(" ")[0] ||
+    user?.displayName?.split(
+      " "
+    )[0] ||
     "Explorer";
 
   const questProgress =
@@ -300,14 +391,10 @@ export default function DashboardPage() {
 
   return (
     <main className="student-dashboard">
-
-      {/* =====================================
-          DESKTOP HEADER
-      ====================================== */}
+      {/* DESKTOP HEADER */}
 
       <header className="student-app-header">
         <div className="student-app-header-content">
-
           <Link
             href="/dashboard"
             className="student-brand"
@@ -373,26 +460,22 @@ export default function DashboardPage() {
               {firstName}
             </span>
           </Link>
-
         </div>
       </header>
 
-
-      {/* =====================================
-          HERO / PLAYER PROFILE
-      ====================================== */}
+      {/* HERO / PLAYER PROFILE */}
 
       <section className="dashboard-game-hero">
-
         <div className="dashboard-hero-orb dashboard-orb-one" />
         <div className="dashboard-hero-orb dashboard-orb-two" />
 
         <div className="student-content-container dashboard-hero-content">
-
           <div className="dashboard-welcome">
-
             <span className="dashboard-eyebrow">
-              <Sparkles size={14} />
+              <Sparkles
+                size={14}
+              />
+
               YOUR SKILL QUEST
             </span>
 
@@ -404,18 +487,15 @@ export default function DashboardPage() {
             </h1>
 
             <p>
-              Keep exploring, building skills
-              and discovering where your
+              Keep exploring,
+              building skills and
+              discovering where your
               interests can take you.
             </p>
-
           </div>
 
-
           <div className="dashboard-player-panel">
-
             <div className="dashboard-level-emblem">
-
               <span>
                 LEVEL
               </span>
@@ -423,12 +503,9 @@ export default function DashboardPage() {
               <strong>
                 {gameData.level}
               </strong>
-
             </div>
 
-
             <div className="dashboard-player-progress">
-
               <div className="dashboard-rank-line">
                 <div>
                   <span>
@@ -441,10 +518,14 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="dashboard-total-xp">
-                  <Star size={17} />
+                  <Star
+                    size={17}
+                  />
 
                   <strong>
-                    {gameData.totalXp}
+                    {
+                      gameData.totalXp
+                    }
                   </strong>
 
                   <span>
@@ -453,25 +534,27 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-
               <div className="dashboard-progress-labels">
-
                 <span>
-                  Level {gameData.level}
+                  Level{" "}
+                  {
+                    gameData.level
+                  }
                 </span>
 
                 {gameData.nextLevelXp ? (
                   <span>
-                    {gameData.nextLevelXp} XP
+                    {
+                      gameData.nextLevelXp
+                    }{" "}
+                    XP
                   </span>
                 ) : (
                   <span>
                     MAX LEVEL
                   </span>
                 )}
-
               </div>
-
 
               <div className="dashboard-xp-track">
                 <div
@@ -485,42 +568,37 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-
               {gameData.nextLevelXp ? (
                 <p>
                   <strong>
                     {gameData.nextLevelXp -
                       gameData.totalXp}
                   </strong>{" "}
-                  XP until your next level
+                  XP until your next
+                  level
                 </p>
               ) : (
                 <p>
-                  You reached the highest
-                  current Skill Quest level.
+                  You reached the
+                  highest current Skill
+                  Quest level.
                 </p>
               )}
-
             </div>
-
           </div>
-
         </div>
       </section>
 
-
-      {/* =====================================
-          MAIN CONTENT
-      ====================================== */}
+      {/* MAIN CONTENT */}
 
       <section className="student-content-container dashboard-main">
-
         {/* PLAYER STATS */}
 
         <div className="dashboard-stat-grid">
-
           <DashboardStat
-            icon={CheckCircle2}
+            icon={
+              CheckCircle2
+            }
             value={
               gameData.completedWorkshops
             }
@@ -530,36 +608,36 @@ export default function DashboardPage() {
 
           <DashboardStat
             icon={Trophy}
-            value={gameData.badgeCount}
+            value={
+              gameData.badgeCount
+            }
             label="Badges"
             detail="Unlocked"
           />
 
           <DashboardStat
             icon={Compass}
-            value={gameData.categoryCount}
+            value={
+              gameData.categoryCount
+            }
             label="Skill Areas"
             detail="Explored"
           />
 
           <DashboardStat
             icon={Zap}
-            value={gameData.totalXp}
+            value={
+              gameData.totalXp
+            }
             label="Total XP"
             detail="Earned"
           />
-
         </div>
 
-
-        {/* =====================================
-            NEXT WORKSHOP + QUEST
-        ====================================== */}
+        {/* NEXT WORKSHOP + QUEST */}
 
         <div className="dashboard-focus-grid">
-
           <section className="dashboard-section">
-
             <div className="dashboard-section-heading">
               <div>
                 <span>
@@ -567,16 +645,18 @@ export default function DashboardPage() {
                 </span>
 
                 <h2>
-                  Continue Your Journey
+                  Continue Your
+                  Journey
                 </h2>
               </div>
 
               <Link href="/registered-workshops">
                 View all
-                <ChevronRight size={16} />
+                <ChevronRight
+                  size={16}
+                />
               </Link>
             </div>
-
 
             {nextWorkshop ? (
               <NextWorkshopCard
@@ -586,25 +666,28 @@ export default function DashboardPage() {
               />
             ) : (
               <div className="dashboard-empty-workshop">
-
                 <div>
-                  <Rocket size={31} />
+                  <Rocket
+                    size={31}
+                  />
                 </div>
 
                 <section>
                   <span>
-                    READY FOR YOUR NEXT QUEST?
+                    READY FOR YOUR NEXT
+                    QUEST?
                   </span>
 
                   <h3>
-                    Find a workshop that
-                    interests you.
+                    Find a workshop
+                    that interests you.
                   </h3>
 
                   <p>
-                    Register for a workshop
-                    and start earning XP,
-                    badges and skill progress.
+                    Register for a
+                    workshop and start
+                    earning XP, badges
+                    and skill progress.
                   </p>
 
                   <Link href="/workshops">
@@ -614,15 +697,11 @@ export default function DashboardPage() {
                     />
                   </Link>
                 </section>
-
               </div>
             )}
-
           </section>
 
-
           <section className="dashboard-section">
-
             <div className="dashboard-section-heading">
               <div>
                 <span>
@@ -636,10 +715,11 @@ export default function DashboardPage() {
 
               <Link href="/journey">
                 All quests
-                <ChevronRight size={16} />
+                <ChevronRight
+                  size={16}
+                />
               </Link>
             </div>
-
 
             {activeQuest && (
               <article
@@ -649,27 +729,29 @@ export default function DashboardPage() {
                     : ""
                 }`}
               >
-
                 <div className="dashboard-quest-top">
-
                   <div className="dashboard-quest-icon">
                     {activeQuest.completed ? (
                       <CheckCircle2
                         size={27}
                       />
                     ) : (
-                      <Target size={27} />
+                      <Target
+                        size={27}
+                      />
                     )}
                   </div>
 
                   <div className="dashboard-quest-reward">
-                    <Star size={14} />
-
+                    <Star
+                      size={14}
+                    />
                     +
-                    {activeQuest.reward}
+                    {
+                      activeQuest.reward
+                    }
                     {" XP"}
                   </div>
-
                 </div>
 
                 <span className="dashboard-quest-label">
@@ -679,13 +761,16 @@ export default function DashboardPage() {
                 </span>
 
                 <h3>
-                  {activeQuest.title}
+                  {
+                    activeQuest.title
+                  }
                 </h3>
 
                 <p>
-                  {activeQuest.description}
+                  {
+                    activeQuest.description
+                  }
                 </p>
-
 
                 <div className="dashboard-quest-progress-heading">
                   <span>
@@ -693,9 +778,13 @@ export default function DashboardPage() {
                   </span>
 
                   <strong>
-                    {activeQuest.current}
+                    {
+                      activeQuest.current
+                    }
                     {" / "}
-                    {activeQuest.target}
+                    {
+                      activeQuest.target
+                    }
                   </strong>
                 </div>
 
@@ -721,21 +810,14 @@ export default function DashboardPage() {
                     />
                   </Link>
                 </div>
-
               </article>
             )}
-
           </section>
-
         </div>
 
-
-        {/* =====================================
-            SKILL TRACKS
-        ====================================== */}
+        {/* SKILL TRACKS */}
 
         <section className="dashboard-section dashboard-skills-section">
-
           <div className="dashboard-section-heading">
             <div>
               <span>
@@ -749,75 +831,89 @@ export default function DashboardPage() {
 
             <Link href="/journey">
               Full journey
-              <ChevronRight size={16} />
+              <ChevronRight
+                size={16}
+              />
             </Link>
           </div>
 
-
-          {gameData.skillTracks.length >
-          0 ? (
+          {gameData.skillTracks
+            .length > 0 ? (
             <div className="dashboard-skill-grid">
-
               {gameData.skillTracks
                 .slice(0, 3)
-                .map((track) => (
-                  <article
-                    className="dashboard-skill-card"
-                    key={track.category}
-                  >
+                .map(
+                  (track) => (
+                    <article
+                      className="dashboard-skill-card"
+                      key={
+                        track.category
+                      }
+                    >
+                      <div className="dashboard-skill-header">
+                        <div className="dashboard-skill-icon">
+                          <Zap
+                            size={20}
+                          />
+                        </div>
 
-                    <div className="dashboard-skill-header">
-
-                      <div className="dashboard-skill-icon">
-                        <Zap size={20} />
+                        <span>
+                          LVL{" "}
+                          {
+                            track.level
+                          }
+                        </span>
                       </div>
 
-                      <span>
-                        LVL {track.level}
-                      </span>
+                      <h3>
+                        {
+                          track.category
+                        }
+                      </h3>
 
-                    </div>
+                      <p>
+                        {
+                          track.completed
+                        }{" "}
+                        workshop
+                        {track.completed !==
+                        1
+                          ? "s"
+                          : ""}{" "}
+                        completed
+                      </p>
 
-                    <h3>
-                      {track.category}
-                    </h3>
+                      <div className="dashboard-skill-progress">
+                        <div
+                          style={{
+                            width:
+                              `${track.progressPercentage}%`,
+                          }}
+                        />
+                      </div>
 
-                    <p>
-                      {track.completed}{" "}
-                      workshop
-                      {track.completed !== 1
-                        ? "s"
-                        : ""}{" "}
-                      completed
-                    </p>
+                      <footer>
+                        <span>
+                          {track.xp} Skill
+                          XP
+                        </span>
 
-                    <div className="dashboard-skill-progress">
-                      <div
-                        style={{
-                          width:
-                            `${track.progressPercentage}%`,
-                        }}
-                      />
-                    </div>
-
-                    <footer>
-                      <span>
-                        {track.xp} Skill XP
-                      </span>
-
-                      <strong>
-                        {track.progressPercentage}%
-                      </strong>
-                    </footer>
-
-                  </article>
-                ))}
-
+                        <strong>
+                          {
+                            track.progressPercentage
+                          }
+                          %
+                        </strong>
+                      </footer>
+                    </article>
+                  )
+                )}
             </div>
           ) : (
             <div className="dashboard-no-skills">
-
-              <Compass size={31} />
+              <Compass
+                size={31}
+              />
 
               <div>
                 <strong>
@@ -825,23 +921,18 @@ export default function DashboardPage() {
                 </strong>
 
                 <span>
-                  Complete your first workshop
-                  to start building your skills.
+                  Complete your first
+                  workshop to start
+                  building your skills.
                 </span>
               </div>
-
             </div>
           )}
-
         </section>
 
-
-        {/* =====================================
-            RECOMMENDATIONS
-        ====================================== */}
+        {/* RECOMMENDATIONS */}
 
         <section className="dashboard-section dashboard-recommendation-section">
-
           <div className="dashboard-section-heading">
             <div>
               <span>
@@ -849,41 +940,42 @@ export default function DashboardPage() {
               </span>
 
               <h2>
-                Discover What's Next
+                Discover What&apos;s
+                Next
               </h2>
             </div>
 
             <Link href="/workshops">
               Browse all
-              <ChevronRight size={16} />
+              <ChevronRight
+                size={16}
+              />
             </Link>
           </div>
 
-
           <div className="dashboard-recommendation-grid">
-
             {recommendedWorkshops.map(
               (workshop) => (
                 <RecommendedWorkshop
-                  key={workshop.id}
-                  workshop={workshop}
+                  key={
+                    workshop.id
+                  }
+                  workshop={
+                    workshop
+                  }
                 />
               )
             )}
-
           </div>
-
         </section>
 
-
-        {/* =====================================
-            CTA
-        ====================================== */}
+        {/* CTA */}
 
         <section className="dashboard-journey-cta">
-
           <div className="dashboard-cta-icon">
-            <Trophy size={33} />
+            <Trophy
+              size={33}
+            />
           </div>
 
           <div>
@@ -892,72 +984,88 @@ export default function DashboardPage() {
             </span>
 
             <h2>
-              Every workshop gets you
-              closer to your future.
+              Every workshop gets
+              you closer to your
+              future.
             </h2>
 
             <p>
               Build skills, unlock
-              achievements and discover
-              pathways that match what
-              you're interested in.
+              achievements and
+              discover pathways that
+              match what you&apos;re
+              interested in.
             </p>
           </div>
 
           <Link href="/journey">
             View My Journey
-            <ChevronRight size={16} />
+            <ChevronRight
+              size={16}
+            />
           </Link>
-
         </section>
-
       </section>
 
-
-      {/* =====================================
-          MOBILE NAVIGATION
-      ====================================== */}
+      {/* MOBILE NAVIGATION */}
 
       <nav className="student-bottom-navigation">
-
         <Link
           href="/dashboard"
           className="active"
         >
-          <Home size={20} />
-          <span>Home</span>
+          <Home
+            size={20}
+          />
+
+          <span>
+            Home
+          </span>
         </Link>
 
         <Link href="/workshops">
-          <BookOpen size={20} />
-          <span>Workshops</span>
+          <BookOpen
+            size={20}
+          />
+
+          <span>
+            Workshops
+          </span>
         </Link>
 
         <Link href="/journey">
-          <Map size={20} />
-          <span>Journey</span>
+          <Map
+            size={20}
+          />
+
+          <span>
+            Journey
+          </span>
         </Link>
 
         <Link href="/badges">
-          <Trophy size={20} />
-          <span>Badges</span>
+          <Trophy
+            size={20}
+          />
+
+          <span>
+            Badges
+          </span>
         </Link>
 
         <Link href="/profile">
-          <UserRound size={20} />
-          <span>Profile</span>
+          <UserRound
+            size={20}
+          />
+
+          <span>
+            Profile
+          </span>
         </Link>
-
       </nav>
-
     </main>
   );
 }
-
-
-/* ==========================================
-   COMPONENTS
-========================================== */
 
 function DashboardStat({
   icon: Icon,
@@ -967,9 +1075,10 @@ function DashboardStat({
 }) {
   return (
     <article className="dashboard-stat-card">
-
       <div className="dashboard-stat-icon">
-        <Icon size={21} />
+        <Icon
+          size={21}
+        />
       </div>
 
       <div>
@@ -985,11 +1094,9 @@ function DashboardStat({
           {detail}
         </small>
       </div>
-
     </article>
   );
 }
-
 
 function NextWorkshopCard({
   registration,
@@ -1005,12 +1112,12 @@ function NextWorkshopCard({
 
   return (
     <article className="dashboard-next-workshop">
-
       <div className="dashboard-next-image">
-
         <Image
           src={image}
-          alt={workshop.title}
+          alt={
+            workshop.title
+          }
           fill
           sizes="(max-width: 700px) 100vw, 500px"
         />
@@ -1018,12 +1125,9 @@ function NextWorkshopCard({
         <span>
           UPCOMING
         </span>
-
       </div>
 
-
       <div className="dashboard-next-content">
-
         <small>
           {workshop.category ||
             workshop.programArea ||
@@ -1034,28 +1138,27 @@ function NextWorkshopCard({
           {workshop.title}
         </h3>
 
-
         <div className="dashboard-next-details">
-
           <div>
-            <CalendarDays size={16} />
+            <CalendarDays
+              size={16}
+            />
 
             {workshop.date ||
               "Workshop date"}
           </div>
 
           <div>
-            <MapPin size={16} />
+            <MapPin
+              size={16}
+            />
 
             {workshop.location ||
               "SAIT Campus"}
           </div>
-
         </div>
 
-
         <div className="dashboard-next-actions">
-
           <Link
             href={`/workshops/${workshop.id}`}
           >
@@ -1066,18 +1169,17 @@ function NextWorkshopCard({
             href={`/scan-attendance?workshopId=${workshop.id}`}
             className="dashboard-scan-button"
           >
-            <QrCode size={16} />
+            <QrCode
+              size={16}
+            />
+
             Scan Attendance
           </Link>
-
         </div>
-
       </div>
-
     </article>
   );
 }
-
 
 function RecommendedWorkshop({
   workshop,
@@ -1093,12 +1195,12 @@ function RecommendedWorkshop({
       href={`/workshops/${workshop.id}`}
       className="dashboard-recommendation-card"
     >
-
       <div className="dashboard-recommendation-image">
-
         <Image
           src={image}
-          alt={workshop.title}
+          alt={
+            workshop.title
+          }
           fill
           sizes="(max-width: 700px) 100vw, 350px"
         />
@@ -1106,16 +1208,16 @@ function RecommendedWorkshop({
         {workshop.recommendationScore >
           0 && (
           <span>
-            <Sparkles size={12} />
+            <Sparkles
+              size={12}
+            />
+
             MATCHED TO YOU
           </span>
         )}
-
       </div>
 
-
       <div className="dashboard-recommendation-content">
-
         <small>
           {workshop.category ||
             workshop.programArea ||
@@ -1131,11 +1233,11 @@ function RecommendedWorkshop({
             Explore Workshop
           </span>
 
-          <ChevronRight size={17} />
+          <ChevronRight
+            size={17}
+          />
         </div>
-
       </div>
-
     </Link>
   );
 }

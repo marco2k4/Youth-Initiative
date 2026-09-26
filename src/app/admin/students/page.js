@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 
 import {
-  auth,
-} from "@/services/firebase";
+  adminFetch,
+} from "@/services/adminApi";
 
 export default function AdminStudentsPage() {
   const [students, setStudents] =
@@ -43,8 +43,10 @@ export default function AdminStudentsPage() {
   const [saving, setSaving] =
     useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
   const [message, setMessage] =
     useState("");
@@ -53,37 +55,14 @@ export default function AdminStudentsPage() {
     loadStudents();
   }, []);
 
-
-  async function getToken() {
-    const user =
-      auth.currentUser;
-
-    if (!user) {
-      throw new Error(
-        "Admin session unavailable."
-      );
-    }
-
-    return user.getIdToken();
-  }
-
-
   async function loadStudents() {
     try {
       setLoading(true);
-
-      const token =
-        await getToken();
+      setErrorMessage("");
 
       const response =
-        await fetch(
-          "/api/admin/students",
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
+        await adminFetch(
+          "/api/admin/students"
         );
 
       const data =
@@ -91,7 +70,8 @@ export default function AdminStudentsPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.message
+          data.message ||
+            "Students could not be loaded."
         );
       }
 
@@ -100,13 +80,13 @@ export default function AdminStudentsPage() {
       );
     } catch (error) {
       setErrorMessage(
-        error.message
+        error.message ||
+          "Students could not be loaded."
       );
     } finally {
       setLoading(false);
     }
   }
-
 
   const filteredStudents =
     useMemo(() => {
@@ -141,7 +121,6 @@ export default function AdminStudentsPage() {
       searchText,
     ]);
 
-
   async function saveStudent(
     event
   ) {
@@ -152,11 +131,8 @@ export default function AdminStudentsPage() {
       setMessage("");
       setErrorMessage("");
 
-      const token =
-        await getToken();
-
       const response =
-        await fetch(
+        await adminFetch(
           "/api/admin/students",
           {
             method: "PUT",
@@ -164,9 +140,6 @@ export default function AdminStudentsPage() {
             headers: {
               "Content-Type":
                 "application/json",
-
-              Authorization:
-                `Bearer ${token}`,
             },
 
             body:
@@ -181,7 +154,8 @@ export default function AdminStudentsPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.message
+          data.message ||
+            "Student could not be updated."
         );
       }
 
@@ -196,20 +170,23 @@ export default function AdminStudentsPage() {
       await loadStudents();
     } catch (error) {
       setErrorMessage(
-        error.message
+        error.message ||
+          "Student could not be updated."
       );
     } finally {
       setSaving(false);
     }
   }
 
-
   async function deactivateStudent(
     student
   ) {
     const confirmed =
       window.confirm(
-        `Deactivate ${student.fullName || student.youthId}?`
+        `Deactivate ${
+          student.fullName ||
+          student.youthId
+        }?`
       );
 
     if (!confirmed) {
@@ -217,22 +194,18 @@ export default function AdminStudentsPage() {
     }
 
     try {
-      const token =
-        await getToken();
+      setMessage("");
+      setErrorMessage("");
 
       const response =
-        await fetch(
+        await adminFetch(
           "/api/admin/students",
           {
-            method:
-              "DELETE",
+            method: "DELETE",
 
             headers: {
               "Content-Type":
                 "application/json",
-
-              Authorization:
-                `Bearer ${token}`,
             },
 
             body:
@@ -247,7 +220,8 @@ export default function AdminStudentsPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.message
+          data.message ||
+            "Student could not be deactivated."
         );
       }
 
@@ -258,17 +232,15 @@ export default function AdminStudentsPage() {
       await loadStudents();
     } catch (error) {
       setErrorMessage(
-        error.message
+        error.message ||
+          "Student could not be deactivated."
       );
     }
   }
 
-
   return (
     <main className="admin-students-page">
-
       <div className="admin-page-heading">
-
         <div>
           <span>
             ADMIN DASHBOARD
@@ -293,9 +265,7 @@ export default function AdminStudentsPage() {
             Students
           </span>
         </div>
-
       </div>
-
 
       {message && (
         <div className="admin-success-message">
@@ -309,9 +279,7 @@ export default function AdminStudentsPage() {
         </div>
       )}
 
-
       <div className="admin-student-search">
-
         <Search size={19} />
 
         <input
@@ -324,12 +292,9 @@ export default function AdminStudentsPage() {
             )
           }
         />
-
       </div>
 
-
       <section className="admin-student-table-card">
-
         {loading ? (
           <div className="admin-student-state">
             <LoaderCircle
@@ -342,15 +307,15 @@ export default function AdminStudentsPage() {
         ) : filteredStudents.length ===
           0 ? (
           <div className="admin-student-state">
-            <UserRound size={43} />
+            <UserRound
+              size={43}
+            />
 
             No students found.
           </div>
         ) : (
           <div className="admin-table-scroll">
-
             <table className="admin-student-table">
-
               <thead>
                 <tr>
                   <th>Student</th>
@@ -363,9 +328,7 @@ export default function AdminStudentsPage() {
                 </tr>
               </thead>
 
-
               <tbody>
-
                 {filteredStudents.map(
                   (student) => (
                     <tr
@@ -373,21 +336,30 @@ export default function AdminStudentsPage() {
                         student.id
                       }
                     >
-
                       <td>
                         <strong>
                           {student.fullName ||
-                            `${student.firstName || ""} ${student.lastName || ""}`}
+                            `${
+                              student.firstName ||
+                              ""
+                            } ${
+                              student.lastName ||
+                              ""
+                            }`}
                         </strong>
 
                         <span>
-                          {student.contactEmail}
+                          {
+                            student.contactEmail
+                          }
                         </span>
                       </td>
 
                       <td>
                         <strong className="admin-youth-id">
-                          {student.youthId}
+                          {
+                            student.youthId
+                          }
                         </strong>
                       </td>
 
@@ -423,7 +395,6 @@ export default function AdminStudentsPage() {
 
                       <td>
                         <div className="admin-row-actions">
-
                           <button
                             type="button"
                             title="View"
@@ -433,7 +404,9 @@ export default function AdminStudentsPage() {
                               )
                             }
                           >
-                            <Eye size={17} />
+                            <Eye
+                              size={17}
+                            />
                           </button>
 
                           <button
@@ -442,13 +415,16 @@ export default function AdminStudentsPage() {
                             onClick={() =>
                               setEditingStudent({
                                 ...student,
+
                                 interests:
                                   student.interests ||
                                   [],
                               })
                             }
                           >
-                            <Edit3 size={17} />
+                            <Edit3
+                              size={17}
+                            />
                           </button>
 
                           <button
@@ -469,23 +445,16 @@ export default function AdminStudentsPage() {
                               size={17}
                             />
                           </button>
-
                         </div>
                       </td>
-
                     </tr>
                   )
                 )}
-
               </tbody>
-
             </table>
-
           </div>
         )}
-
       </section>
-
 
       {selectedStudent && (
         <StudentViewModal
@@ -499,7 +468,6 @@ export default function AdminStudentsPage() {
           }
         />
       )}
-
 
       {editingStudent && (
         <StudentEditModal
@@ -520,11 +488,9 @@ export default function AdminStudentsPage() {
           }
         />
       )}
-
     </main>
   );
 }
-
 
 function StudentViewModal({
   student,
@@ -532,9 +498,7 @@ function StudentViewModal({
 }) {
   return (
     <div className="admin-student-modal-overlay">
-
       <section className="admin-student-modal">
-
         <header>
           <div>
             <span>
@@ -554,9 +518,7 @@ function StudentViewModal({
           </button>
         </header>
 
-
         <div className="admin-student-profile-grid">
-
           <ProfileItem
             label="Youth ID"
             value={
@@ -588,21 +550,24 @@ function StudentViewModal({
           <ProfileItem
             label="XP"
             value={
-              student.totalXp || 0
+              student.totalXp ||
+              0
             }
           />
 
           <ProfileItem
             label="Level"
             value={
-              student.level || 1
+              student.level ||
+              1
             }
           />
 
           <ProfileItem
             label="Badges"
             value={
-              student.badgeCount || 0
+              student.badgeCount ||
+              0
             }
           />
 
@@ -613,12 +578,9 @@ function StudentViewModal({
               0
             }
           />
-
         </div>
 
-
         <div className="admin-student-interests">
-
           <span>
             INTERESTS
           </span>
@@ -645,15 +607,11 @@ function StudentViewModal({
               </p>
             )}
           </div>
-
         </div>
-
       </section>
-
     </div>
   );
 }
-
 
 function StudentEditModal({
   student,
@@ -676,9 +634,7 @@ function StudentEditModal({
 
   return (
     <div className="admin-student-modal-overlay">
-
       <section className="admin-student-modal">
-
         <header>
           <div>
             <span>
@@ -698,14 +654,11 @@ function StudentEditModal({
           </button>
         </header>
 
-
         <form
           className="admin-student-edit-form"
           onSubmit={onSubmit}
         >
-
           <div className="admin-form-two-columns">
-
             <StudentField
               label="First Name"
               value={
@@ -733,9 +686,7 @@ function StudentEditModal({
                 )
               }
             />
-
           </div>
-
 
           <StudentField
             label="Contact Email"
@@ -751,7 +702,6 @@ function StudentEditModal({
               )
             }
           />
-
 
           <label className="admin-form-field">
             <span>
@@ -788,7 +738,6 @@ function StudentEditModal({
             </select>
           </label>
 
-
           <label className="admin-form-field">
             <span>
               Status
@@ -816,9 +765,7 @@ function StudentEditModal({
             </select>
           </label>
 
-
           <div className="admin-student-modal-actions">
-
             <button
               type="button"
               onClick={onClose}
@@ -843,17 +790,12 @@ function StudentEditModal({
                 "Save Changes"
               )}
             </button>
-
           </div>
-
         </form>
-
       </section>
-
     </div>
   );
 }
-
 
 function StudentField({
   label,
@@ -863,7 +805,6 @@ function StudentField({
 }) {
   return (
     <label className="admin-form-field">
-
       <span>
         {label}
       </span>
@@ -877,11 +818,9 @@ function StudentField({
           )
         }
       />
-
     </label>
   );
 }
-
 
 function ProfileItem({
   label,
@@ -901,7 +840,6 @@ function ProfileItem({
   );
 }
 
-
 function formatMode(mode) {
   if (
     mode === "in-person"
@@ -909,17 +847,20 @@ function formatMode(mode) {
     return "In Person";
   }
 
-  if (mode === "online") {
+  if (
+    mode === "online"
+  ) {
     return "Online";
   }
 
-  if (mode === "both") {
+  if (
+    mode === "both"
+  ) {
     return "Both";
   }
 
   return "Not selected";
 }
-
 
 function formatInterest(
   interest
@@ -928,7 +869,9 @@ function formatInterest(
     .split(" ")
     .map(
       (word) =>
-        word.charAt(0).toUpperCase() +
+        word
+          .charAt(0)
+          .toUpperCase() +
         word.slice(1)
     )
     .join(" ");

@@ -1,15 +1,17 @@
 "use client";
 
 import Image from "next/image";
+
 import {
   useParams,
   useRouter,
   useSearchParams,
 } from "next/navigation";
-import { useEffect, useState } from "react";
+
 import {
-  appCheckFetch,
-} from "@/services/appCheckApi";
+  useEffect,
+  useState,
+} from "react";
 
 import {
   LoaderCircle,
@@ -17,22 +19,38 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
+
 export default function ConsentPage() {
   const router = useRouter();
+
   const params = useParams();
-  const searchParams = useSearchParams();
 
-  const registrationId = params.registrationId;
-  const token = searchParams.get("token");
+  const searchParams =
+    useSearchParams();
 
-  const [registration, setRegistration] =
-    useState(null);
+  const registrationId =
+    params.registrationId;
 
-  const [pageStatus, setPageStatus] =
-    useState("loading");
+  const token =
+    searchParams.get("token");
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [
+    registration,
+    setRegistration,
+  ] = useState(null);
+
+  const [
+    pageStatus,
+    setPageStatus,
+  ] = useState("loading");
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
   const [
     guardianConfirmed,
@@ -44,41 +62,53 @@ export default function ConsentPage() {
     setTermsAccepted,
   ] = useState(false);
 
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
 
-  const [submitError, setSubmitError] =
-    useState("");
+  const [
+    submitError,
+    setSubmitError,
+  ] = useState("");
 
   useEffect(() => {
     async function verifyConsentLink() {
       try {
-        if (!registrationId || !token) {
+        if (
+          !registrationId ||
+          !token
+        ) {
           throw new Error(
             "The consent link is incomplete."
           );
         }
 
-        const response = await appCheckFetch(
-          "/api/consent/verify",
-          {
-            method: "POST",
+        /*
+          This only CHECKS the consent link.
 
-            headers: {
-              "Content-Type": "application/json",
-            },
+          A normal App Check token is enough.
+          We do not consume a limited-use token
+          until the guardian actually approves.
+        */
 
-            body: JSON.stringify({
-              registrationId,
-              token,
-              guardianConfirmed,
-              termsAccepted,
-            }),
-          },
-          {
-            limitedUse: true,
-          }
-        );
+        const response =
+          await appCheckFetch(
+            "/api/consent/verify",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                registrationId,
+                token,
+              }),
+            }
+          );
 
         const responseData =
           await response.json();
@@ -94,86 +124,121 @@ export default function ConsentPage() {
           responseData.registration
         );
 
-        setPageStatus("ready");
+        setPageStatus(
+          "ready"
+        );
       } catch (error) {
-        setErrorMessage(error.message);
-        setPageStatus("error");
+        setErrorMessage(
+          error.message ||
+            "The consent link could not be verified."
+        );
+
+        setPageStatus(
+          "error"
+        );
       }
     }
 
     verifyConsentLink();
-  }, [registrationId, token]);
+  }, [
+    registrationId,
+    token,
+  ]);
 
-  const handleProvideConsent = async () => {
-    if (
-      !guardianConfirmed ||
-      !termsAccepted ||
-      isSubmitting
-    ) {
-      return;
-    }
+  const handleProvideConsent =
+    async () => {
+      if (
+        !guardianConfirmed ||
+        !termsAccepted ||
+        isSubmitting
+      ) {
+        return;
+      }
 
-    try {
-      setSubmitError("");
-      setIsSubmitting(true);
+      try {
+        setSubmitError("");
 
-      const response = await fetch(
-        "/api/consent/approve",
-        {
-          method: "POST",
+        setIsSubmitting(
+          true
+        );
 
-          headers: {
-            "Content-Type": "application/json",
-          },
+        /*
+          Consent approval is a security-critical
+          one-time operation.
 
-          body: JSON.stringify({
-            registrationId,
-            token,
-            guardianConfirmed,
-            termsAccepted,
-          }),
+          Use a limited-use App Check token.
+        */
+
+        const response =
+          await appCheckFetch(
+            "/api/consent/approve",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  registrationId,
+                  token,
+                  guardianConfirmed,
+                  termsAccepted,
+                }),
+            },
+            {
+              limitedUse: true,
+            }
+          );
+
+        const responseData =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            responseData.message ||
+              "Consent could not be recorded."
+          );
         }
-      );
 
-      const responseData =
-        await response.json();
+        if (
+          !responseData
+            .activationToken
+        ) {
+          throw new Error(
+            "Account setup could not be started."
+          );
+        }
 
-      if (!response.ok) {
-        throw new Error(
-          responseData.message ||
-            "Consent could not be recorded."
+        router.push(
+          `/set-password/${encodeURIComponent(
+            registrationId
+          )}?token=${encodeURIComponent(
+            responseData.activationToken
+          )}`
+        );
+      } catch (error) {
+        console.error(
+          "Consent approval error:",
+          error
+        );
+
+        setSubmitError(
+          error.message ||
+            "We could not record your consent. Please try again."
+        );
+      } finally {
+        setIsSubmitting(
+          false
         );
       }
+    };
 
-      if (!responseData.activationToken) {
-        throw new Error(
-          "Account setup could not be started."
-        );
-      }
-
-      router.push(
-        `/set-password/${encodeURIComponent(
-          registrationId
-        )}?token=${encodeURIComponent(
-          responseData.activationToken
-        )}`
-      );
-    } catch (error) {
-      console.error(
-        "Consent approval error:",
-        error
-      );
-
-      setSubmitError(
-        error.message ||
-          "We could not record your consent. Please try again."
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (pageStatus === "loading") {
+  if (
+    pageStatus === "loading"
+  ) {
     return (
       <main className="consent-action-page">
         <div className="consent-action-card consent-status-card">
@@ -182,7 +247,9 @@ export default function ConsentPage() {
             size={38}
           />
 
-          <h1>Verifying consent link</h1>
+          <h1>
+            Verifying consent link
+          </h1>
 
           <p>
             Please wait while we check this
@@ -193,7 +260,9 @@ export default function ConsentPage() {
     );
   }
 
-  if (pageStatus === "error") {
+  if (
+    pageStatus === "error"
+  ) {
     return (
       <main className="consent-action-page">
         <div className="consent-action-card consent-status-card">
@@ -202,15 +271,21 @@ export default function ConsentPage() {
             className="consent-error-icon"
           />
 
-          <h1>Link unavailable</h1>
+          <h1>
+            Link unavailable
+          </h1>
 
-          <p>{errorMessage}</p>
+          <p>
+            {errorMessage}
+          </p>
 
           <button
             type="button"
             className="consent-primary-button"
             onClick={() =>
-              router.push("/register")
+              router.push(
+                "/register"
+              )
             }
           >
             Return to Registration
@@ -233,19 +308,27 @@ export default function ConsentPage() {
         />
 
         <div className="consent-shield-icon">
-          <ShieldCheck size={38} />
+          <ShieldCheck
+            size={38}
+          />
         </div>
 
         <span className="consent-page-label">
           Parent / Guardian
         </span>
 
-        <h1>Parental Consent Request</h1>
+        <h1>
+          Parental Consent Request
+        </h1>
 
         <p className="consent-action-introduction">
           <strong>
-            {registration.firstName}{" "}
-            {registration.lastName}
+            {
+              registration.firstName
+            }{" "}
+            {
+              registration.lastName
+            }
           </strong>{" "}
           has requested access to the SAIT
           Youth Initiative student platform.
@@ -260,11 +343,18 @@ export default function ConsentPage() {
             <input
               id="guardianConfirmed"
               type="checkbox"
-              checked={guardianConfirmed}
-              disabled={isSubmitting}
-              onChange={(event) =>
+              checked={
+                guardianConfirmed
+              }
+              disabled={
+                isSubmitting
+              }
+              onChange={(
+                event
+              ) =>
                 setGuardianConfirmed(
-                  event.target.checked
+                  event.target
+                    .checked
                 )
               }
             />
@@ -280,11 +370,18 @@ export default function ConsentPage() {
             <input
               id="termsAccepted"
               type="checkbox"
-              checked={termsAccepted}
-              disabled={isSubmitting}
-              onChange={(event) =>
+              checked={
+                termsAccepted
+              }
+              disabled={
+                isSubmitting
+              }
+              onChange={(
+                event
+              ) =>
                 setTermsAccepted(
-                  event.target.checked
+                  event.target
+                    .checked
                 )
               }
             />
@@ -311,7 +408,9 @@ export default function ConsentPage() {
         <button
           type="button"
           className="consent-primary-button"
-          onClick={handleProvideConsent}
+          onClick={
+            handleProvideConsent
+          }
           disabled={
             !guardianConfirmed ||
             !termsAccepted ||
@@ -324,6 +423,7 @@ export default function ConsentPage() {
                 size={19}
                 className="button-spinner"
               />
+
               Recording Consent...
             </>
           ) : (

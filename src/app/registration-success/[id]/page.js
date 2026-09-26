@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
+
 import {
   useParams,
   useRouter,
 } from "next/navigation";
+
 import {
   useEffect,
   useState,
@@ -19,49 +21,72 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
-import { useAuth } from "@/contexts/AuthContext";
+import {
+  useAuth,
+} from "@/contexts/AuthContext";
 
 import {
   studentFetch,
 } from "@/services/studentApi";
 
 export default function RegistrationSuccessPage() {
-  const params = useParams();
-  const router = useRouter();
+  const params =
+    useParams();
+
+  const router =
+    useRouter();
 
   const {
     user,
-    loading: authLoading,
+    loading:
+      authLoading,
   } = useAuth();
 
-  const [workshop, setWorkshop] =
-    useState(null);
+  const [
+    workshop,
+    setWorkshop,
+  ] = useState(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
-  const [successMessage, setSuccessMessage] =
-    useState("");
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] = useState("");
 
   useEffect(() => {
     async function loadWorkshop() {
       try {
-        const response = await fetch(
-          `/api/workshops/${params.id}`
-        );
+        setLoading(true);
+        setErrorMessage("");
+
+        const response =
+          await studentFetch(
+            `/api/workshops/${encodeURIComponent(
+              params.id
+            )}`
+          );
 
         const responseData =
           await response.json();
 
         if (!response.ok) {
           throw new Error(
-            responseData.message
+            responseData.message ||
+              "Workshop could not be loaded."
           );
         }
 
@@ -78,15 +103,37 @@ export default function RegistrationSuccessPage() {
       }
     }
 
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+      setLoading(false);
+
+      router.replace(
+        "/login"
+      );
+
+      return;
+    }
+
     if (params.id) {
       loadWorkshop();
     }
-  }, [params.id]);
+  }, [
+    params.id,
+    user,
+    authLoading,
+    router,
+  ]);
 
   async function confirmRegistration() {
     try {
       if (!user) {
-        router.push("/login");
+        router.push(
+          "/login"
+        );
+
         return;
       }
 
@@ -94,31 +141,32 @@ export default function RegistrationSuccessPage() {
       setErrorMessage("");
       setSuccessMessage("");
 
-      const idToken =
-        await user.getIdToken();
+      const response =
+        await studentFetch(
+          "/api/registrations",
+          {
+            method: "POST",
 
-      const response = await studentFetch(
-        "/api/registrations",
-        {
-          method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            workshopId: params.id,
-          }),
-        }
-      );
+            body:
+              JSON.stringify({
+                workshopId:
+                  params.id,
+              }),
+          }
+        );
 
       const responseData =
         await response.json();
 
       if (!response.ok) {
         throw new Error(
-          responseData.message
+          responseData.message ||
+            "Registration could not be confirmed."
         );
       }
 
@@ -141,7 +189,10 @@ export default function RegistrationSuccessPage() {
     }
   }
 
-  if (loading || authLoading) {
+  if (
+    loading ||
+    authLoading
+  ) {
     return (
       <main className="registration-confirm-page">
         <section className="registration-confirm-card">
@@ -150,7 +201,9 @@ export default function RegistrationSuccessPage() {
             size={38}
           />
 
-          <p>Loading registration...</p>
+          <p>
+            Loading registration...
+          </p>
         </section>
       </main>
     );
@@ -160,11 +213,17 @@ export default function RegistrationSuccessPage() {
     return (
       <main className="registration-confirm-page">
         <section className="registration-confirm-card">
-          <TriangleAlert size={48} />
+          <TriangleAlert
+            size={48}
+          />
 
-          <h1>Workshop unavailable</h1>
+          <h1>
+            Workshop unavailable
+          </h1>
 
-          <p>{errorMessage}</p>
+          <p>
+            {errorMessage}
+          </p>
 
           <Link href="/workshops">
             Return to Workshops
@@ -180,9 +239,14 @@ export default function RegistrationSuccessPage() {
         <button
           type="button"
           className="registration-back-button"
-          onClick={() => router.back()}
+          onClick={() =>
+            router.back()
+          }
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft
+            size={20}
+          />
+
           Back
         </button>
 
@@ -195,20 +259,26 @@ export default function RegistrationSuccessPage() {
         />
 
         <div className="registration-check-icon">
-          <CheckCircle2 size={45} />
+          <CheckCircle2
+            size={45}
+          />
         </div>
 
         <span className="registration-confirm-label">
-          Registration Confirmation
+          Registration
+          Confirmation
         </span>
 
         <h1>
-          Did you complete your registration?
+          Did you complete your
+          registration?
         </h1>
 
         <p>
-          Confirm that you completed the official
-          SAIT registration process for:
+          Confirm that you
+          completed the official
+          SAIT registration process
+          for:
         </p>
 
         <div className="registration-workshop-summary">
@@ -222,7 +292,8 @@ export default function RegistrationSuccessPage() {
           </strong>
 
           <small>
-            {workshop.grade} ·{" "}
+            {workshop.grade}
+            {" · "}
             {workshop.learningMode ===
             "online"
               ? "Online"
@@ -238,7 +309,10 @@ export default function RegistrationSuccessPage() {
 
         {successMessage && (
           <div className="registration-confirm-success">
-            <CheckCircle2 size={19} />
+            <CheckCircle2
+              size={19}
+            />
+
             {successMessage}
           </div>
         )}
@@ -248,9 +322,13 @@ export default function RegistrationSuccessPage() {
           className="registration-confirm-button"
           disabled={
             saving ||
-            Boolean(successMessage)
+            Boolean(
+              successMessage
+            )
           }
-          onClick={confirmRegistration}
+          onClick={
+            confirmRegistration
+          }
         >
           {saving ? (
             <>
@@ -275,14 +353,20 @@ export default function RegistrationSuccessPage() {
           rel="noreferrer"
           className="registration-portal-link"
         >
-          Return to Official Registration
-          <ExternalLink size={17} />
+          Return to Official
+          Registration
+
+          <ExternalLink
+            size={17}
+          />
         </a>
 
         <p className="registration-confirm-note">
-          For this MVP, external registration is
-          confirmed by the student. Future versions
-          can integrate directly with the official
+          For this MVP, external
+          registration is confirmed
+          by the student. Future
+          versions can integrate
+          directly with the official
           registration platform.
         </p>
       </section>

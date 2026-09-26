@@ -7,10 +7,6 @@ import {
 } from "next/navigation";
 
 import {
-  appCheckFetch,
-} from "@/services/appCheckApi";
-
-import {
   useEffect,
   useState,
 } from "react";
@@ -21,6 +17,10 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
+
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
 
 export default function ParentalVerificationPage() {
   const params =
@@ -36,22 +36,39 @@ export default function ParentalVerificationPage() {
     params.token;
 
   const token =
-    searchParams.get("token");
+    searchParams.get(
+      "token"
+    );
 
-  const [status, setStatus] =
-    useState("loading");
+  const [
+    status,
+    setStatus,
+  ] = useState(
+    "loading"
+  );
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
-  const [approving, setApproving] =
-    useState(false);
+  const [
+    approving,
+    setApproving,
+  ] = useState(false);
 
   useEffect(() => {
     async function checkLink() {
       try {
+        /*
+          Initial link verification uses a
+          normal App Check token.
+
+          Nothing is consumed at this stage.
+        */
+
         const response =
-          await fetch(
+          await appCheckFetch(
             "/api/password-reset/verify",
             {
               method: "POST",
@@ -75,17 +92,23 @@ export default function ParentalVerificationPage() {
 
         if (!response.ok) {
           throw new Error(
-            data.message
+            data.message ||
+              "Verification link could not be validated."
           );
         }
 
-        setStatus("ready");
+        setStatus(
+          "ready"
+        );
       } catch (error) {
         setErrorMessage(
-          error.message
+          error.message ||
+            "Verification link could not be validated."
         );
 
-        setStatus("error");
+        setStatus(
+          "error"
+        );
       }
     }
 
@@ -99,17 +122,27 @@ export default function ParentalVerificationPage() {
         "Verification link is incomplete."
       );
 
-      setStatus("error");
+      setStatus(
+        "error"
+      );
     }
   }, [
     requestId,
     token,
   ]);
 
-
   async function approveReset() {
     try {
-      setApproving(true);
+      setApproving(
+        true
+      );
+
+      /*
+        Guardian approval creates a new
+        password-reset authorization.
+
+        Use a limited-use App Check token.
+      */
 
       const response =
         await appCheckFetch(
@@ -139,13 +172,15 @@ export default function ParentalVerificationPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.message
+          data.message ||
+            "Password reset approval failed."
         );
       }
 
       if (
         !data.resetToken ||
-        typeof data.resetToken !== "string"
+        typeof data.resetToken !==
+          "string"
       ) {
         throw new Error(
           "Password reset authorization could not be created."
@@ -161,22 +196,26 @@ export default function ParentalVerificationPage() {
       );
     } catch (error) {
       setErrorMessage(
-        error.message
+        error.message ||
+          "Password reset approval failed."
       );
 
-      setStatus("error");
+      setStatus(
+        "error"
+      );
     } finally {
-      setApproving(false);
+      setApproving(
+        false
+      );
     }
   }
 
-
-  if (status === "loading") {
+  if (
+    status === "loading"
+  ) {
     return (
       <main className="password-flow-page">
-
         <section className="password-flow-card password-status-card">
-
           <LoaderCircle
             size={36}
             className="button-spinner"
@@ -185,20 +224,17 @@ export default function ParentalVerificationPage() {
           <h1>
             Verifying link...
           </h1>
-
         </section>
-
       </main>
     );
   }
 
-
-  if (status === "error") {
+  if (
+    status === "error"
+  ) {
     return (
       <main className="password-flow-page">
-
         <section className="password-flow-card password-status-card">
-
           <TriangleAlert
             size={45}
             className="password-error-icon"
@@ -211,21 +247,18 @@ export default function ParentalVerificationPage() {
           <p>
             {errorMessage}
           </p>
-
         </section>
-
       </main>
     );
   }
 
-
   return (
     <main className="password-flow-page">
-
       <section className="password-flow-card">
-
         <div className="password-flow-icon">
-          <ShieldCheck size={36} />
+          <ShieldCheck
+            size={36}
+          />
         </div>
 
         <span className="password-flow-label">
@@ -241,37 +274,43 @@ export default function ParentalVerificationPage() {
           for this Youth Initiative account.
         </p>
 
-
         <div className="parent-reset-confirmations">
-
           <div>
-            <CheckCircle2 size={19} />
+            <CheckCircle2
+              size={19}
+            />
 
             I am the student&apos;s
             parent or guardian.
           </div>
 
           <div>
-            <CheckCircle2 size={19} />
+            <CheckCircle2
+              size={19}
+            />
 
             I approve resetting the
             student&apos;s password.
           </div>
 
           <div>
-            <CheckCircle2 size={19} />
+            <CheckCircle2
+              size={19}
+            />
 
             I will create the new password.
           </div>
-
         </div>
-
 
         <button
           type="button"
           className="password-primary-button"
-          disabled={approving}
-          onClick={approveReset}
+          disabled={
+            approving
+          }
+          onClick={
+            approveReset
+          }
         >
           {approving ? (
             <>
@@ -287,14 +326,11 @@ export default function ParentalVerificationPage() {
           )}
         </button>
 
-
         <p className="password-mvp-note">
           Parent identity verification is
           simulated for the MVP prototype.
         </p>
-
       </section>
-
     </main>
   );
 }
