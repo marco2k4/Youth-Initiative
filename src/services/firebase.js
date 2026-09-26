@@ -13,7 +13,6 @@ import {
 } from "firebase/firestore";
 
 import {
-  getAppCheck,
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
 } from "firebase/app-check";
@@ -51,14 +50,11 @@ const app =
         firebaseConfig
       );
 
-const auth =
-  getAuth(app);
-
-const db =
-  getFirestore(app);
-
 let appCheck = null;
 
+/*
+  App Check runs only in the browser.
+*/
 if (
   typeof window !==
   "undefined"
@@ -69,12 +65,12 @@ if (
 
   if (siteKey) {
     /*
-      Local development uses Firebase's
-      App Check debug provider.
+      Local development only.
 
-      Never enable debug mode in production.
+      Firebase generates a debug token
+      that must be registered in the
+      Firebase App Check console.
     */
-
     if (
       process.env.NODE_ENV ===
       "development"
@@ -83,11 +79,20 @@ if (
         true;
     }
 
-    try {
-      appCheck =
-        getAppCheck(app);
-    } catch {
-      appCheck =
+    /*
+      Next.js Fast Refresh can execute this
+      module again during development.
+
+      Keep one App Check instance globally
+      so initializeAppCheck() is not called
+      repeatedly for the same Firebase app.
+    */
+    if (
+      !globalThis
+        .__youthInitiativeAppCheck
+    ) {
+      globalThis
+        .__youthInitiativeAppCheck =
         initializeAppCheck(
           app,
           {
@@ -101,8 +106,22 @@ if (
           }
         );
     }
+
+    appCheck =
+      globalThis
+        .__youthInitiativeAppCheck;
   }
 }
+
+/*
+  Initialize Firebase services after
+  App Check initialization.
+*/
+const auth =
+  getAuth(app);
+
+const db =
+  getFirestore(app);
 
 export {
   app,
