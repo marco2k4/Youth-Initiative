@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import {
   ArrowLeft,
@@ -12,8 +15,25 @@ import {
 } from "lucide-react";
 
 export default function ConsentPendingPage() {
-  const [registration, setRegistration] =
-    useState(null);
+  const [
+    registration,
+    setRegistration,
+  ] = useState(null);
+
+  const [
+    resendStatus,
+    setResendStatus,
+  ] = useState("");
+
+  const [
+    resendMessage,
+    setResendMessage,
+  ] = useState("");
+
+  const [
+    isResending,
+    setIsResending,
+  ] = useState(false);
 
   useEffect(() => {
     const savedRegistration =
@@ -24,7 +44,9 @@ export default function ConsentPendingPage() {
     if (savedRegistration) {
       try {
         setRegistration(
-          JSON.parse(savedRegistration)
+          JSON.parse(
+            savedRegistration
+          )
         );
       } catch {
         setRegistration(null);
@@ -32,12 +54,107 @@ export default function ConsentPendingPage() {
     }
   }, []);
 
-  const email =
-    registration?.email ||
-    "the email address provided";
+  const parentEmail =
+    registration
+      ?.parentEmailMasked ||
+    "the parent or guardian email address";
 
   const firstName =
-    registration?.firstName || "the student";
+    registration?.firstName ||
+    "the student";
+
+  const handleResend = async () => {
+    if (
+      isResending ||
+      !registration
+        ?.registrationId ||
+      !registration
+        ?.resendToken
+    ) {
+      return;
+    }
+
+    try {
+      setIsResending(true);
+
+      setResendStatus("");
+      setResendMessage("");
+
+      const response =
+        await fetch(
+          "/api/consent/resend",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              registrationId:
+                registration
+                  .registrationId,
+
+              resendToken:
+                registration
+                  .resendToken,
+            }),
+          }
+        );
+
+      const responseData =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          responseData.message ||
+            "The email could not be resent."
+        );
+      }
+
+      setResendStatus(
+        "success"
+      );
+
+      setResendMessage(
+        "A new consent email has been sent successfully."
+      );
+
+      const updatedRegistration =
+        {
+          ...registration,
+          emailSent: true,
+        };
+
+      setRegistration(
+        updatedRegistration
+      );
+
+      sessionStorage.setItem(
+        "pendingRegistration",
+        JSON.stringify(
+          updatedRegistration
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Consent resend error:",
+        error
+      );
+
+      setResendStatus(
+        "error"
+      );
+
+      setResendMessage(
+        error.message ||
+          "The email could not be resent. Please try again."
+      );
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   return (
     <main className="consent-pending-page">
@@ -63,19 +180,22 @@ export default function ConsentPendingPage() {
           <Mail size={37} />
         </div>
 
-        <h1>Parent / Guardian Consent</h1>
+        <h1>
+          Parent / Guardian Consent
+        </h1>
 
         <p className="consent-introduction">
-          Since {firstName} is under 18, we need
-          consent from a parent or guardian.
+          Since {firstName} is under 18,
+          we need consent from a parent or
+          guardian.
         </p>
 
         <p className="consent-email-label">
-          We sent a parental verification link to:
+          Parent / guardian email:
         </p>
 
         <strong className="consent-email">
-          {email}
+          {parentEmail}
         </strong>
 
         <Link
@@ -89,14 +209,55 @@ export default function ConsentPendingPage() {
           <CheckCircle2 size={25} />
 
           <p>
-            An email has been sent with
-            instructions to approve {firstName}
-            &apos;s account. The link expires in
-            30 minutes.
+            {registration
+              ?.emailSent === false
+              ? "We could not deliver the first consent email. Please use the resend button below."
+              : `An email has been sent with instructions to approve ${firstName}'s account. The link expires in 30 minutes.`}
           </p>
         </div>
 
+        {resendMessage && (
+          <p
+            className={
+              resendStatus ===
+              "error"
+                ? "auth-error-message"
+                : "consent-email-label"
+            }
+            role="status"
+          >
+            {resendMessage}
+          </p>
+        )}
+
         <div className="consent-pending-actions">
+          {registration
+            ?.resendToken && (
+            <button
+              type="button"
+              className="consent-login-button"
+              disabled={
+                isResending
+              }
+              onClick={
+                handleResend
+              }
+            >
+              <RefreshCw
+                size={18}
+                className={
+                  isResending
+                    ? "button-spinner"
+                    : ""
+                }
+              />
+
+              {isResending
+                ? "Sending..."
+                : "Resend Consent Email"}
+            </button>
+          )}
+
           <Link
             href="/login"
             className="consent-login-button"
@@ -105,7 +266,8 @@ export default function ConsentPendingPage() {
           </Link>
 
           <p>
-            Check your inbox and spam folder before
+            Check the parent or guardian&apos;s
+            inbox and spam folder before
             requesting another email.
           </p>
         </div>

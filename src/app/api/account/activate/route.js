@@ -9,6 +9,9 @@ import {
 
 export const runtime = "nodejs";
 
+const YOUTH_ID_ALPHABET =
+  "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 function hashToken(token) {
   return crypto
     .createHash("sha256")
@@ -16,46 +19,104 @@ function hashToken(token) {
     .digest("hex");
 }
 
-function createYouthId(firstName, lastName, dateOfBirth) {
-  const firstInitial = firstName
-    .charAt(0)
-    .toUpperCase();
+function hashesMatch(
+  providedHash,
+  storedHash
+) {
+  if (
+    typeof providedHash !== "string" ||
+    typeof storedHash !== "string"
+  ) {
+    return false;
+  }
 
-  const lastLetters = lastName
-    .replace(/[^A-Za-z]/g, "")
-    .slice(0, 2)
-    .toUpperCase()
-    .padEnd(2, "X");
+  const providedBuffer =
+    Buffer.from(providedHash, "hex");
 
-  const [year, month, day] = dateOfBirth.split("-");
+  const storedBuffer =
+    Buffer.from(storedHash, "hex");
 
-  const randomDigits = crypto
-    .randomInt(1000, 10000)
-    .toString();
+  if (
+    providedBuffer.length !==
+    storedBuffer.length
+  ) {
+    return false;
+  }
 
-  return `${firstInitial}${lastLetters}${day}${month}${randomDigits}`;
+  return crypto.timingSafeEqual(
+    providedBuffer,
+    storedBuffer
+  );
 }
 
-async function generateUniqueYouthId(
-  firstName,
-  lastName,
-  dateOfBirth
+function createRandomYouthId() {
+  let randomPart = "";
+
+  for (let index = 0; index < 12; index += 1) {
+    randomPart +=
+      YOUTH_ID_ALPHABET[
+        crypto.randomInt(
+          0,
+          YOUTH_ID_ALPHABET.length
+        )
+      ];
+  }
+
+  return `YI-${randomPart}`;
+}
+
+async function reserveUniqueYouthId(
+  registrationId
 ) {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const youthId = createYouthId(
-      firstName,
-      lastName,
-      dateOfBirth
+  for (
+    let attempt = 0;
+    attempt < 15;
+    attempt += 1
+  ) {
+    const youthId =
+      createRandomYouthId();
+
+    const reservationReference =
+      adminDb
+        .collection(
+          "youthIdReservations"
+        )
+        .doc(youthId.toLowerCase());
+
+    let reserved = false;
+
+    await adminDb.runTransaction(
+      async (transaction) => {
+        const snapshot =
+          await transaction.get(
+            reservationReference
+          );
+
+        if (snapshot.exists) {
+          return;
+        }
+
+        transaction.set(
+          reservationReference,
+          {
+            youthId,
+            registrationId,
+            status: "reserved",
+
+            createdAt:
+              FieldValue.serverTimestamp(),
+          }
+        );
+
+        reserved = true;
+      }
     );
 
-    const existingStudent = await adminDb
-      .collection("students")
-      .where("youthId", "==", youthId)
-      .limit(1)
-      .get();
-
-    if (existingStudent.empty) {
-      return youthId;
+    if (reserved) {
+      return {
+        youthId,
+        reservationReference,
+      };
     }
   }
 
@@ -64,12 +125,18 @@ async function generateUniqueYouthId(
   );
 }
 
-function validatePassword(password, registration) {
+function validatePassword(
+  password,
+  registration
+) {
   if (typeof password !== "string") {
     return "Password is required.";
   }
 
-  if (password.length < 10 || password.length > 64) {
+  if (
+    password.length < 10 ||
+    password.length > 64
+  ) {
     return "Password must contain between 10 and 64 characters.";
   }
 
@@ -89,7 +156,8 @@ function validatePassword(password, registration) {
     return "Password must contain a special character.";
   }
 
-  const passwordLower = password.toLowerCase();
+  const passwordLower =
+    password.toLowerCase();
 
   if (
     passwordLower.includes(
@@ -105,8 +173,42 @@ function validatePassword(password, registration) {
   return null;
 }
 
+function createRequestError(
+  message,
+  status,
+  code
+) {
+  const error = new Error(message);
+
+  error.status = status;
+  error.code = code;
+
+  return error;
+}
+
+function getExpiryDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date =
+    value?.toDate?.() ||
+    new Date(value);
+
+  if (
+    Number.isNaN(date.getTime())
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
 export async function POST(request) {
   let createdUser = null;
+  let youthIdReservation = null;
+  let registrationReference = null;
+  let activationClaimed = false;
 
   try {
     const {
@@ -117,17 +219,22 @@ export async function POST(request) {
     } = await request.json();
 
     if (
-      !registrationId ||
-      !token ||
-      !password ||
-      !confirmPassword
+      typeof registrationId !== "string" ||
+      !registrationId.trim() ||
+      typeof token !== "string" ||
+      !token.trim() ||
+      typeof password !== "string" ||
+      typeof confirmPassword !== "string"
     ) {
       return Response.json(
         {
           success: false,
-          message: "All password fields are required.",
+          message:
+            "All password fields are required.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -135,175 +242,405 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-          message: "Passwords do not match.",
+          message:
+            "Passwords do not match.",
         },
-        { status: 400 }
-      );
-    }
-
-    const registrationReference = adminDb
-      .collection("pendingRegistrations")
-      .doc(registrationId);
-
-    const registrationSnapshot =
-      await registrationReference.get();
-
-    if (!registrationSnapshot.exists) {
-      return Response.json(
         {
-          success: false,
-          message: "The registration could not be found.",
-        },
-        { status: 404 }
+          status: 400,
+        }
       );
     }
 
-    const registration = registrationSnapshot.data();
+    registrationReference =
+      adminDb
+        .collection(
+          "pendingRegistrations"
+        )
+        .doc(registrationId);
 
-    if (registration.status === "account_created") {
-      return Response.json(
-        {
-          success: false,
-          message: "This account has already been activated.",
-        },
-        { status: 409 }
+    /*
+      Atomically verify the account setup token
+      and claim this registration for activation.
+    */
+
+    const registration =
+      await adminDb.runTransaction(
+        async (transaction) => {
+          const snapshot =
+            await transaction.get(
+              registrationReference
+            );
+
+          if (!snapshot.exists) {
+            throw createRequestError(
+              "The registration could not be found.",
+              404,
+              "registration-not-found"
+            );
+          }
+
+          const registrationData =
+            snapshot.data();
+
+          if (
+            registrationData.status ===
+            "account_created"
+          ) {
+            throw createRequestError(
+              "This account has already been activated.",
+              409,
+              "account-already-created"
+            );
+          }
+
+          if (
+            registrationData.activationInProgress ===
+            true
+          ) {
+            throw createRequestError(
+              "This account is already being activated. Please wait and try again.",
+              409,
+              "activation-in-progress"
+            );
+          }
+
+          const requiresParentalConsent =
+            registrationData.requiresParentalConsent ===
+            true;
+
+          let storedTokenHash;
+          let tokenExpiry;
+
+          /*
+            MINOR:
+            Parent must already have approved consent.
+            We use the separate activation token created
+            by /api/consent/approve.
+          */
+
+          if (requiresParentalConsent) {
+            if (
+              registrationData.status !==
+                "consent_approved" ||
+              registrationData.consentStatus !==
+                "approved"
+            ) {
+              throw createRequestError(
+                "Parental consent must be completed before this account can be activated.",
+                403,
+                "consent-required"
+              );
+            }
+
+            storedTokenHash =
+              registrationData.activationTokenHash;
+
+            tokenExpiry =
+              getExpiryDate(
+                registrationData.activationExpiresAt
+              );
+          } else {
+            /*
+              ADULT:
+              No parental consent is required.
+
+              The setup token created during registration
+              is used directly.
+            */
+
+            if (
+              registrationData.status !==
+                "consent_not_required" ||
+              registrationData.consentStatus !==
+                "not_required"
+            ) {
+              throw createRequestError(
+                "This registration is not ready for account activation.",
+                409,
+                "invalid-registration-state"
+              );
+            }
+
+            storedTokenHash =
+              registrationData.consentTokenHash;
+
+            tokenExpiry =
+              getExpiryDate(
+                registrationData.consentExpiresAt
+              );
+          }
+
+          const providedTokenHash =
+            hashToken(token);
+
+          if (
+            !hashesMatch(
+              providedTokenHash,
+              storedTokenHash
+            )
+          ) {
+            throw createRequestError(
+              "The account setup link is invalid.",
+              401,
+              "invalid-activation-token"
+            );
+          }
+
+          if (
+            !tokenExpiry ||
+            tokenExpiry.getTime() <
+              Date.now()
+          ) {
+            throw createRequestError(
+              "The account setup link has expired.",
+              410,
+              "activation-token-expired"
+            );
+          }
+
+          const passwordError =
+            validatePassword(
+              password,
+              registrationData
+            );
+
+          if (passwordError) {
+            throw createRequestError(
+              passwordError,
+              400,
+              "invalid-password"
+            );
+          }
+
+          transaction.update(
+            registrationReference,
+            {
+              activationInProgress: true,
+
+              activationStartedAt:
+                FieldValue.serverTimestamp(),
+
+              updatedAt:
+                FieldValue.serverTimestamp(),
+            }
+          );
+
+          return registrationData;
+        }
       );
-    }
 
-    const providedTokenHash = hashToken(token);
+    activationClaimed = true;
 
-    if (
-      providedTokenHash !== registration.consentTokenHash
-    ) {
-      return Response.json(
-        {
-          success: false,
-          message: "The consent token is invalid.",
-        },
-        { status: 401 }
+    /*
+      Generate and reserve a completely random
+      Youth Initiative ID.
+
+      It contains no name or date-of-birth data.
+    */
+
+    youthIdReservation =
+      await reserveUniqueYouthId(
+        registrationId
       );
-    }
 
-    const expiryDate =
-      registration.consentExpiresAt?.toDate?.() ||
-      new Date(registration.consentExpiresAt);
-
-    if (expiryDate.getTime() < Date.now()) {
-      return Response.json(
-        {
-          success: false,
-          message: "The consent link has expired.",
-        },
-        { status: 410 }
-      );
-    }
-
-    const passwordError = validatePassword(
-      password,
-      registration
-    );
-
-    if (passwordError) {
-      return Response.json(
-        {
-          success: false,
-          message: passwordError,
-        },
-        { status: 400 }
-      );
-    }
-
-    const youthId = await generateUniqueYouthId(
-      registration.firstName,
-      registration.lastName,
-      registration.dateOfBirth
-    );
+    const youthId =
+      youthIdReservation.youthId;
 
     const internalEmail =
       `${youthId.toLowerCase()}@youthinitiative.local`;
 
-    createdUser = await adminAuth.createUser({
-      email: internalEmail,
-      password,
-      displayName:
-        `${registration.firstName} ${registration.lastName}`,
-      emailVerified: true,
-      disabled: false,
-    });
+    /*
+      Firebase Authentication securely stores
+      the password.
+
+      Password is never written to Firestore.
+    */
+
+    createdUser =
+      await adminAuth.createUser({
+        email: internalEmail,
+        password,
+
+        displayName:
+          `${registration.firstName} ${registration.lastName}`,
+
+        emailVerified: true,
+        disabled: false,
+      });
+
+    const studentReference =
+      adminDb
+        .collection("students")
+        .doc(createdUser.uid);
 
     const batch = adminDb.batch();
 
-    const studentReference = adminDb
-      .collection("students")
-      .doc(createdUser.uid);
+    batch.set(
+      studentReference,
+      {
+        firebaseUid:
+          createdUser.uid,
 
-    batch.set(studentReference, {
-      firebaseUid: createdUser.uid,
+        registrationId,
 
-      firstName: registration.firstName,
-      lastName: registration.lastName,
-      fullName:
-        `${registration.firstName} ${registration.lastName}`,
+        firstName:
+          registration.firstName,
 
-      contactEmail: registration.email,
-      internalEmail,
+        lastName:
+          registration.lastName,
+
+        fullName:
+          `${registration.firstName} ${registration.lastName}`,
+
+        contactEmail:
+          registration.email,
+
+        parentEmail:
+          registration.parentEmail ||
+          null,
+
+        internalEmail,
+        youthId,
+
+        dateOfBirth:
+          registration.dateOfBirth,
+
+        requiresParentalConsent:
+          registration.requiresParentalConsent ===
+          true,
+
+        role: "student",
+
+        accountStatus: "active",
+
+        consentStatus:
+          registration.requiresParentalConsent ===
+          true
+            ? "approved"
+            : "not_required",
+
+        learningMode: null,
+
+        interests: [],
+
+        onboardingCompleted: false,
+
+        totalXp: 0,
+        level: 1,
+        badgeCount: 0,
+
+        completedWorkshopCount: 0,
+
+        currentStreak: 0,
+
+        createdAt:
+          FieldValue.serverTimestamp(),
+
+        updatedAt:
+          FieldValue.serverTimestamp(),
+
+        lastLoginAt: null,
+      }
+    );
+
+    /*
+      Finalize the pending registration.
+
+      Consent approval is NOT created here.
+      For minors it was already recorded by
+      /api/consent/approve.
+    */
+
+    const registrationUpdate = {
+      firebaseUid:
+        createdUser.uid,
+
       youthId,
-      dateOfBirth: registration.dateOfBirth,
-
-      role: "student",
-      accountStatus: "active",
-      consentStatus: "approved",
-
-      learningMode: null,
-      interests: [],
-      onboardingCompleted: false,
-
-      totalXp: 0,
-      level: 1,
-      badgeCount: 0,
-      completedWorkshopCount: 0,
-      currentStreak: 0,
-
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      lastLoginAt: null,
-    });
-
-    batch.update(registrationReference, {
-      firebaseUid: createdUser.uid,
-      youthId,
       internalEmail,
 
-      consentStatus: "approved",
-      status: "account_created",
-
-      consentApprovedAt:
-        FieldValue.serverTimestamp(),
+      status:
+        "account_created",
 
       accountCreatedAt:
         FieldValue.serverTimestamp(),
 
-      updatedAt: FieldValue.serverTimestamp(),
+      activationInProgress: false,
 
-      consentTokenHash: null,
-    });
+      activationCompletedAt:
+        FieldValue.serverTimestamp(),
+
+      updatedAt:
+        FieldValue.serverTimestamp(),
+    };
+
+    if (
+      registration.requiresParentalConsent ===
+      true
+    ) {
+      registrationUpdate.activationTokenHash =
+        null;
+
+      registrationUpdate.activationExpiresAt =
+        null;
+    } else {
+      registrationUpdate.consentTokenHash =
+        null;
+
+      registrationUpdate.consentExpiresAt =
+        null;
+    }
+
+    batch.update(
+      registrationReference,
+      registrationUpdate
+    );
+
+    batch.update(
+      youthIdReservation
+        .reservationReference,
+      {
+        status: "assigned",
+
+        firebaseUid:
+          createdUser.uid,
+
+        assignedAt:
+          FieldValue.serverTimestamp(),
+      }
+    );
 
     await batch.commit();
 
     return Response.json(
       {
         success: true,
+
         youthId,
-        firstName: registration.firstName,
+
+        firstName:
+          registration.firstName,
       },
-      { status: 201 }
+      {
+        status: 201,
+      }
     );
   } catch (error) {
-    console.error("Account activation error:", error);
+    console.error(
+      "Account activation error:",
+      error
+    );
+
+    /*
+      If Firebase Auth was created but Firestore
+      failed, remove the Auth user so we do not
+      leave a broken account behind.
+    */
 
     if (createdUser?.uid) {
       try {
-        await adminAuth.deleteUser(createdUser.uid);
+        await adminAuth.deleteUser(
+          createdUser.uid
+        );
       } catch (cleanupError) {
         console.error(
           "Failed to clean up Auth user:",
@@ -312,15 +649,110 @@ export async function POST(request) {
       }
     }
 
+    /*
+      Remove unused Youth ID reservation.
+    */
+
+    if (
+      youthIdReservation
+        ?.reservationReference
+    ) {
+      try {
+        await youthIdReservation
+          .reservationReference
+          .delete();
+      } catch (cleanupError) {
+        console.error(
+          "Failed to clean up Youth ID reservation:",
+          cleanupError
+        );
+      }
+    }
+
+    /*
+      Release activation lock so the user can
+      retry if account creation failed.
+    */
+
+    if (
+      activationClaimed &&
+      registrationReference
+    ) {
+      try {
+        const snapshot =
+          await registrationReference.get();
+
+        if (
+          snapshot.exists &&
+          snapshot.data().status !==
+            "account_created"
+        ) {
+          await registrationReference.update(
+            {
+              activationInProgress:
+                false,
+
+              activationStartedAt:
+                null,
+
+              updatedAt:
+                FieldValue.serverTimestamp(),
+            }
+          );
+        }
+      } catch (cleanupError) {
+        console.error(
+          "Failed to release activation lock:",
+          cleanupError
+        );
+      }
+    }
+
+    if (error?.status) {
+      return Response.json(
+        {
+          success: false,
+
+          message:
+            error.message,
+
+          code:
+            error.code,
+        },
+        {
+          status:
+            error.status,
+        }
+      );
+    }
+
+    if (
+      error?.code ===
+      "auth/email-already-exists"
+    ) {
+      return Response.json(
+        {
+          success: false,
+
+          message:
+            "An account has already been created for this registration.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
     return Response.json(
       {
         success: false,
+
         message:
-          error?.code === "auth/email-already-exists"
-            ? "An account has already been created for this registration."
-            : "The account could not be activated. Please try again.",
+          "The account could not be activated. Please try again.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

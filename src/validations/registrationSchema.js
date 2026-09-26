@@ -3,12 +3,11 @@ import * as Yup from "yup";
 const nameRegex =
   /^[A-Za-zÀ-ÖØ-öø-ÿ]+(?:[ '-][A-Za-zÀ-ÖØ-öø-ÿ]+)*$/;
 
-function calculateAge(dateOfBirth) {
+export function calculateAge(dateOfBirth) {
   if (!dateOfBirth) {
     return null;
   }
 
-  const today = new Date();
   const birthDate = new Date(
     `${dateOfBirth}T00:00:00`
   );
@@ -16,6 +15,8 @@ function calculateAge(dateOfBirth) {
   if (Number.isNaN(birthDate.getTime())) {
     return null;
   }
+
+  const today = new Date();
 
   let age =
     today.getFullYear() - birthDate.getFullYear();
@@ -43,8 +44,14 @@ export const registrationSchema = Yup.object({
         : value
     )
     .required("First name is required.")
-    .min(2, "First name must contain at least 2 characters.")
-    .max(40, "First name cannot exceed 40 characters.")
+    .min(
+      2,
+      "First name must contain at least 2 characters."
+    )
+    .max(
+      40,
+      "First name cannot exceed 40 characters."
+    )
     .matches(
       nameRegex,
       "Enter a valid first name using letters, spaces, apostrophes or hyphens."
@@ -57,8 +64,14 @@ export const registrationSchema = Yup.object({
         : value
     )
     .required("Last name is required.")
-    .min(2, "Last name must contain at least 2 characters.")
-    .max(40, "Last name cannot exceed 40 characters.")
+    .min(
+      2,
+      "Last name must contain at least 2 characters."
+    )
+    .max(
+      40,
+      "Last name cannot exceed 40 characters."
+    )
     .matches(
       nameRegex,
       "Enter a valid last name using letters, spaces, apostrophes or hyphens."
@@ -70,9 +83,12 @@ export const registrationSchema = Yup.object({
         ? value.trim().toLowerCase()
         : value
     )
-    .required("Email address is required.")
-    .email("Enter a valid email address.")
-    .max(254, "Email address is too long."),
+    .required("Student email address is required.")
+    .email("Enter a valid student email address.")
+    .max(
+      254,
+      "Student email address is too long."
+    ),
 
   dateOfBirth: Yup.string()
     .required("Date of birth is required.")
@@ -84,7 +100,9 @@ export const registrationSchema = Yup.object({
           return false;
         }
 
-        const date = new Date(`${value}T00:00:00`);
+        const date = new Date(
+          `${value}T00:00:00`
+        );
 
         return !Number.isNaN(date.getTime());
       }
@@ -120,6 +138,56 @@ export const registrationSchema = Yup.object({
         return age >= 5 && age <= 25;
       }
     ),
-});
 
-export { calculateAge };
+  parentEmail: Yup.string()
+    .transform((value) =>
+      typeof value === "string"
+        ? value.trim().toLowerCase()
+        : value
+    )
+    .max(
+      254,
+      "Parent or guardian email address is too long."
+    )
+    .email(
+      "Enter a valid parent or guardian email address."
+    )
+    .when("dateOfBirth", {
+      is: (dateOfBirth) => {
+        const age = calculateAge(dateOfBirth);
+
+        return age !== null && age < 18;
+      },
+
+      then: (schema) =>
+        schema.required(
+          "Parent or guardian email is required for students under 18."
+        ),
+
+      otherwise: (schema) =>
+        schema.notRequired(),
+    })
+    .test(
+      "different-from-student",
+      "Parent or guardian email must be different from the student email.",
+      function (value) {
+        const age = calculateAge(
+          this.parent.dateOfBirth
+        );
+
+        if (age === null || age >= 18 || !value) {
+          return true;
+        }
+
+        const studentEmail =
+          this.parent.email
+            ?.trim()
+            .toLowerCase();
+
+        const parentEmail =
+          value.trim().toLowerCase();
+
+        return studentEmail !== parentEmail;
+      }
+    ),
+});

@@ -1,11 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  useParams,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
-  CheckCircle2,
   LoaderCircle,
   ShieldCheck,
   TriangleAlert,
@@ -19,24 +22,49 @@ export default function ConsentPage() {
   const registrationId = params.registrationId;
   const token = searchParams.get("token");
 
-  const [registration, setRegistration] = useState(null);
-  const [pageStatus, setPageStatus] = useState("loading");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [registration, setRegistration] =
+    useState(null);
+
+  const [pageStatus, setPageStatus] =
+    useState("loading");
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  const [
+    guardianConfirmed,
+    setGuardianConfirmed,
+  ] = useState(false);
+
+  const [
+    termsAccepted,
+    setTermsAccepted,
+  ] = useState(false);
+
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
+  const [submitError, setSubmitError] =
+    useState("");
 
   useEffect(() => {
     async function verifyConsentLink() {
       try {
         if (!registrationId || !token) {
-          throw new Error("The consent link is incomplete.");
+          throw new Error(
+            "The consent link is incomplete."
+          );
         }
 
         const response = await fetch(
           "/api/consent/verify",
           {
             method: "POST",
+
             headers: {
               "Content-Type": "application/json",
             },
+
             body: JSON.stringify({
               registrationId,
               token,
@@ -44,7 +72,8 @@ export default function ConsentPage() {
           }
         );
 
-        const responseData = await response.json();
+        const responseData =
+          await response.json();
 
         if (!response.ok) {
           throw new Error(
@@ -53,7 +82,10 @@ export default function ConsentPage() {
           );
         }
 
-        setRegistration(responseData.registration);
+        setRegistration(
+          responseData.registration
+        );
+
         setPageStatus("ready");
       } catch (error) {
         setErrorMessage(error.message);
@@ -64,30 +96,90 @@ export default function ConsentPage() {
     verifyConsentLink();
   }, [registrationId, token]);
 
-  const handleProvideConsent = () => {
-    sessionStorage.setItem(
-      "approvedConsent",
-      JSON.stringify({
-        registrationId,
-        token,
-        firstName: registration.firstName,
-      })
-    );
+  const handleProvideConsent = async () => {
+    if (
+      !guardianConfirmed ||
+      !termsAccepted ||
+      isSubmitting
+    ) {
+      return;
+    }
 
-    router.push(
-      `/set-password/${registrationId}?token=${encodeURIComponent(
-        token
-      )}`
-    );
+    try {
+      setSubmitError("");
+      setIsSubmitting(true);
+
+      const response = await fetch(
+        "/api/consent/approve",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            registrationId,
+            token,
+            guardianConfirmed,
+            termsAccepted,
+          }),
+        }
+      );
+
+      const responseData =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          responseData.message ||
+            "Consent could not be recorded."
+        );
+      }
+
+      if (!responseData.activationToken) {
+        throw new Error(
+          "Account setup could not be started."
+        );
+      }
+
+      router.push(
+        `/set-password/${encodeURIComponent(
+          registrationId
+        )}?token=${encodeURIComponent(
+          responseData.activationToken
+        )}`
+      );
+    } catch (error) {
+      console.error(
+        "Consent approval error:",
+        error
+      );
+
+      setSubmitError(
+        error.message ||
+          "We could not record your consent. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (pageStatus === "loading") {
     return (
       <main className="consent-action-page">
         <div className="consent-action-card consent-status-card">
-          <LoaderCircle className="button-spinner" size={38} />
+          <LoaderCircle
+            className="button-spinner"
+            size={38}
+          />
+
           <h1>Verifying consent link</h1>
-          <p>Please wait while we check this request.</p>
+
+          <p>
+            Please wait while we check this
+            request.
+          </p>
         </div>
       </main>
     );
@@ -97,7 +189,10 @@ export default function ConsentPage() {
     return (
       <main className="consent-action-page">
         <div className="consent-action-card consent-status-card">
-          <TriangleAlert size={48} className="consent-error-icon" />
+          <TriangleAlert
+            size={48}
+            className="consent-error-icon"
+          />
 
           <h1>Link unavailable</h1>
 
@@ -106,7 +201,9 @@ export default function ConsentPage() {
           <button
             type="button"
             className="consent-primary-button"
-            onClick={() => router.push("/register")}
+            onClick={() =>
+              router.push("/register")
+            }
           >
             Return to Registration
           </button>
@@ -139,43 +236,92 @@ export default function ConsentPage() {
 
         <p className="consent-action-introduction">
           <strong>
-            {registration.firstName} {registration.lastName}
+            {registration.firstName}{" "}
+            {registration.lastName}
           </strong>{" "}
-          has requested access to the SAIT Youth Initiative
-          student platform.
+          has requested access to the SAIT
+          Youth Initiative student platform.
         </p>
 
         <div className="consent-review-box">
-          <h2>Please confirm that you:</h2>
+          <h2>
+            Please review and confirm:
+          </h2>
 
           <div>
-            <CheckCircle2 size={20} />
-            Are the student&apos;s parent or legal guardian
+            <input
+              id="guardianConfirmed"
+              type="checkbox"
+              checked={guardianConfirmed}
+              disabled={isSubmitting}
+              onChange={(event) =>
+                setGuardianConfirmed(
+                  event.target.checked
+                )
+              }
+            />
+
+            <label htmlFor="guardianConfirmed">
+              I confirm that I am the
+              student&apos;s parent or legal
+              guardian.
+            </label>
           </div>
 
           <div>
-            <CheckCircle2 size={20} />
-            Approve the creation of this student account
-          </div>
+            <input
+              id="termsAccepted"
+              type="checkbox"
+              checked={termsAccepted}
+              disabled={isSubmitting}
+              onChange={(event) =>
+                setTermsAccepted(
+                  event.target.checked
+                )
+              }
+            />
 
-          <div>
-            <CheckCircle2 size={20} />
-            Will create and manage the initial password
+            <label htmlFor="termsAccepted">
+              I consent to the creation and use
+              of this student account for the
+              SAIT Youth Initiative application
+              and agree to the applicable terms
+              and privacy requirements.
+            </label>
           </div>
         </div>
+
+        {submitError && (
+          <p
+            className="auth-error-message"
+            role="alert"
+          >
+            {submitError}
+          </p>
+        )}
 
         <button
           type="button"
           className="consent-primary-button"
           onClick={handleProvideConsent}
+          disabled={
+            !guardianConfirmed ||
+            !termsAccepted ||
+            isSubmitting
+          }
         >
-          Provide Consent and Set Password
+          {isSubmitting ? (
+            <>
+              <LoaderCircle
+                size={19}
+                className="button-spinner"
+              />
+              Recording Consent...
+            </>
+          ) : (
+            "Provide Consent and Set Password"
+          )}
         </button>
-
-        <p className="consent-prototype-note">
-          This is a simulated parental-consent process for the
-          MVP prototype.
-        </p>
       </section>
     </main>
   );

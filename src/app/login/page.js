@@ -4,9 +4,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Eye, EyeOff, LoaderCircle } from "lucide-react";
-import { Formik, Form, Field, ErrorMessage } from "formik";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+} from "lucide-react";
+
+import {
+  Formik,
+  Form,
+  Field,
+  ErrorMessage,
+} from "formik";
+
+import {
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+
 import {
   doc,
   getDoc,
@@ -16,14 +32,23 @@ import {
   auth,
   db,
 } from "@/services/firebase";
+
 import * as Yup from "yup";
 
 const loginSchema = Yup.object({
   youthId: Yup.string()
     .trim()
-    .required("Youth Initiative ID is required.")
-    .min(6, "Youth Initiative ID must contain at least 6 characters.")
-    .max(20, "Youth Initiative ID cannot exceed 20 characters.")
+    .required(
+      "Youth Initiative ID is required."
+    )
+    .min(
+      6,
+      "Youth Initiative ID must contain at least 6 characters."
+    )
+    .max(
+      20,
+      "Youth Initiative ID cannot exceed 20 characters."
+    )
     .matches(
       /^[A-Za-z0-9-]+$/,
       "Youth Initiative ID can only contain letters, numbers and hyphens."
@@ -31,25 +56,44 @@ const loginSchema = Yup.object({
 
   password: Yup.string()
     .required("Password is required.")
-    .min(10, "Password must contain at least 10 characters.")
-    .max(64, "Password cannot exceed 64 characters."),
+    .min(
+      10,
+      "Password must contain at least 10 characters."
+    )
+    .max(
+      64,
+      "Password cannot exceed 64 characters."
+    ),
 });
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginError, setLoginError] = useState("");
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
 
-  const handleLogin = async (values, formikHelpers) => {
-    const { setSubmitting } = formikHelpers;
+  const [
+    loginError,
+    setLoginError,
+  ] = useState("");
+
+  const handleLogin = async (
+    values,
+    formikHelpers
+  ) => {
+    const {
+      setSubmitting,
+    } = formikHelpers;
 
     try {
       setLoginError("");
 
-      const cleanedYouthId = values.youthId
-        .trim()
-        .toLowerCase();
+      const cleanedYouthId =
+        values.youthId
+          .trim()
+          .toLowerCase();
 
       const internalEmail =
         `${cleanedYouthId}@youthinitiative.local`;
@@ -70,11 +114,66 @@ export default function LoginPage() {
           )
         );
 
+      /*
+        Authentication alone is not enough.
+
+        The student record must also exist
+        and be a valid active student account.
+      */
+
+      if (!studentSnapshot.exists()) {
+        await signOut(auth);
+
+        throw new Error(
+          "invalid-student-record"
+        );
+      }
+
       const studentData =
         studentSnapshot.data();
 
+      const youthIdMatches =
+        typeof studentData.youthId ===
+          "string" &&
+        studentData.youthId
+          .toLowerCase() ===
+          cleanedYouthId;
+
+      const uidMatches =
+        studentData.firebaseUid ===
+        userCredential.user.uid;
+
+      const accountIsActive =
+        studentData.accountStatus ===
+        "active";
+
+      const studentRoleIsValid =
+        studentData.role ===
+        "student";
+
+      const parentalConsentIsValid =
+        studentData
+          .requiresParentalConsent !==
+          true ||
+        studentData.consentStatus ===
+          "approved";
+
       if (
-        !studentData?.onboardingCompleted
+        !youthIdMatches ||
+        !uidMatches ||
+        !accountIsActive ||
+        !studentRoleIsValid ||
+        !parentalConsentIsValid
+      ) {
+        await signOut(auth);
+
+        throw new Error(
+          "invalid-account-state"
+        );
+      }
+
+      if (
+        !studentData.onboardingCompleted
       ) {
         router.replace(
           "/learning-preference"
@@ -84,9 +183,19 @@ export default function LoginPage() {
       }
 
       router.replace("/dashboard");
-
     } catch (error) {
-      console.error("Login error:", error);
+      console.error(
+        "Login error:",
+        error
+      );
+
+      /*
+        Keep this generic.
+
+        Do not tell someone whether the
+        Youth ID, password or account status
+        was the part that failed.
+      */
 
       setLoginError(
         "Invalid Youth Initiative ID or password."
@@ -105,12 +214,20 @@ export default function LoginPage() {
               type="button"
               className="auth-back-button"
               aria-label="Return to the previous page"
-              onClick={() => router.back()}
+              onClick={() =>
+                router.back()
+              }
             >
-              <ArrowLeft size={29} strokeWidth={2.4} />
+              <ArrowLeft
+                size={29}
+                strokeWidth={2.4}
+              />
             </button>
 
-            <Link href="/" className="auth-logo-link">
+            <Link
+              href="/"
+              className="auth-logo-link"
+            >
               <Image
                 src="/images/landing/sait-logo.jpg"
                 alt="Southern Alberta Institute of Technology"
@@ -127,7 +244,8 @@ export default function LoginPage() {
               <h1>Login</h1>
 
               <p>
-                Enter your information to access your account.
+                Enter your information to access
+                your account.
               </p>
             </div>
 
@@ -136,10 +254,14 @@ export default function LoginPage() {
                 youthId: "",
                 password: "",
               }}
-              validationSchema={loginSchema}
+              validationSchema={
+                loginSchema
+              }
               validateOnBlur
               validateOnChange
-              onSubmit={handleLogin}
+              onSubmit={
+                handleLogin
+              }
             >
               {({
                 errors,
@@ -147,7 +269,10 @@ export default function LoginPage() {
                 isSubmitting,
                 setFieldValue,
               }) => (
-                <Form className="login-form" noValidate>
+                <Form
+                  className="login-form"
+                  noValidate
+                >
                   <div className="login-form-fields">
                     <div className="auth-form-group">
                       <label
@@ -166,14 +291,20 @@ export default function LoginPage() {
                         placeholder=""
                         maxLength={20}
                         className={`auth-form-input ${
-                          errors.youthId && touched.youthId
+                          errors.youthId &&
+                          touched.youthId
                             ? "auth-input-error"
                             : ""
                         }`}
-                        onChange={(event) => {
+                        onChange={(
+                          event
+                        ) => {
                           const cleanedValue =
                             event.target.value
-                              .replace(/\s/g, "")
+                              .replace(
+                                /\s/g,
+                                ""
+                              )
                               .toUpperCase();
 
                           setFieldValue(
@@ -200,7 +331,8 @@ export default function LoginPage() {
 
                       <div
                         className={`auth-password-wrapper ${
-                          errors.password && touched.password
+                          errors.password &&
+                          touched.password
                             ? "auth-input-error"
                             : ""
                         }`}
@@ -228,7 +360,9 @@ export default function LoginPage() {
                           }
                           onClick={() =>
                             setShowPassword(
-                              (currentValue) =>
+                              (
+                                currentValue
+                              ) =>
                                 !currentValue
                             )
                           }
@@ -236,12 +370,16 @@ export default function LoginPage() {
                           {showPassword ? (
                             <EyeOff
                               size={25}
-                              strokeWidth={2.4}
+                              strokeWidth={
+                                2.4
+                              }
                             />
                           ) : (
                             <Eye
                               size={25}
-                              strokeWidth={2.4}
+                              strokeWidth={
+                                2.4
+                              }
                             />
                           )}
                         </button>
@@ -259,7 +397,9 @@ export default function LoginPage() {
                         className="login-server-error"
                         role="alert"
                       >
-                        {loginError}
+                        {
+                          loginError
+                        }
                       </div>
                     )}
                   </div>
@@ -268,7 +408,9 @@ export default function LoginPage() {
                     <button
                       type="submit"
                       className="login-submit-button"
-                      disabled={isSubmitting}
+                      disabled={
+                        isSubmitting
+                      }
                     >
                       {isSubmitting ? (
                         <>
@@ -291,7 +433,8 @@ export default function LoginPage() {
                     </p>
 
                     <p className="create-account-text">
-                      Don&apos;t have an account?{" "}
+                      Don&apos;t have an
+                      account?{" "}
                       <Link href="/register">
                         Create Account
                       </Link>
@@ -312,19 +455,22 @@ export default function LoginPage() {
             </span>
 
             <h2>
-              Your learning journey starts here.
+              Your learning journey starts
+              here.
             </h2>
 
             <p>
-              Explore workshops, build meaningful skills,
-              earn achievements and discover future SAIT
-              pathways.
+              Explore workshops, build
+              meaningful skills, earn
+              achievements and discover future
+              SAIT pathways.
             </p>
 
             <div className="login-feature-list">
               <div>
                 <span>01</span>
-                Personalized workshop recommendations
+                Personalized workshop
+                recommendations
               </div>
 
               <div>
@@ -334,7 +480,8 @@ export default function LoginPage() {
 
               <div>
                 <span>03</span>
-                Discover future education pathways
+                Discover future education
+                pathways
               </div>
             </div>
           </div>
