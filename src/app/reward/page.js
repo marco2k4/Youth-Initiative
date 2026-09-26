@@ -11,26 +11,48 @@ import {
 } from "lucide-react";
 
 import {
-  useEffect,
-  useState,
+  useMemo,
+  useSyncExternalStore,
 } from "react";
 
+function subscribe() {
+  return () => {};
+}
+
+function getServerSnapshot() {
+  return null;
+}
+
+function getClientSnapshot() {
+  return sessionStorage.getItem(
+    "latestReward"
+  );
+}
+
 export default function RewardPage() {
-  const [rewardData, setRewardData] =
-    useState(null);
+  const savedReward =
+    useSyncExternalStore(
+      subscribe,
+      getClientSnapshot,
+      getServerSnapshot
+    );
 
-  useEffect(() => {
-    const saved =
-      sessionStorage.getItem(
-        "latestReward"
-      );
+  const rewardData =
+    useMemo(() => {
+      if (!savedReward) {
+        return null;
+      }
 
-    if (saved) {
-      setRewardData(
-        JSON.parse(saved)
-      );
-    }
-  }, []);
+      try {
+        return JSON.parse(
+          savedReward
+        );
+      } catch {
+        return null;
+      }
+    }, [
+      savedReward,
+    ]);
 
   if (!rewardData) {
     return (
@@ -100,7 +122,9 @@ export default function RewardPage() {
 
         <div className="reward-progress-summary">
           <div>
-            <Star size={21} />
+            <Star
+              size={21}
+            />
 
             <span>
               Total XP
@@ -112,7 +136,9 @@ export default function RewardPage() {
           </div>
 
           <div>
-            <Trophy size={21} />
+            <Trophy
+              size={21}
+            />
 
             <span>
               Level
@@ -124,7 +150,9 @@ export default function RewardPage() {
           </div>
 
           <div>
-            <Award size={21} />
+            <Award
+              size={21}
+            />
 
             <span>
               Rank

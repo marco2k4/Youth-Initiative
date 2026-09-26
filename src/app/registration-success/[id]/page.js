@@ -68,9 +68,29 @@ export default function RegistrationSuccessPage() {
   ] = useState("");
 
   useEffect(() => {
+    if (
+      authLoading
+    ) {
+      return;
+    }
+
+    if (!user) {
+      router.replace(
+        "/login"
+      );
+
+      return;
+    }
+
+    if (!params.id) {
+      return;
+    }
+
+    let cancelled =
+      false;
+
     async function loadWorkshop() {
       try {
-        setLoading(true);
         setErrorMessage("");
 
         const response =
@@ -90,36 +110,39 @@ export default function RegistrationSuccessPage() {
           );
         }
 
-        setWorkshop(
-          responseData.workshop
-        );
+        if (
+          !cancelled
+        ) {
+          setWorkshop(
+            responseData.workshop
+          );
+        }
       } catch (error) {
-        setErrorMessage(
-          error.message ||
-            "Workshop could not be loaded."
-        );
+        if (
+          !cancelled
+        ) {
+          setErrorMessage(
+            error.message ||
+              "Workshop could not be loaded."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (
+          !cancelled
+        ) {
+          setLoading(
+            false
+          );
+        }
       }
     }
 
-    if (authLoading) {
-      return;
-    }
+    loadWorkshop();
 
-    if (!user) {
-      setLoading(false);
-
-      router.replace(
-        "/login"
-      );
-
-      return;
-    }
-
-    if (params.id) {
-      loadWorkshop();
-    }
+    return () => {
+      cancelled =
+        true;
+    };
   }, [
     params.id,
     user,
@@ -190,8 +213,11 @@ export default function RegistrationSuccessPage() {
   }
 
   if (
-    loading ||
-    authLoading
+    authLoading ||
+    (
+      user &&
+      loading
+    )
   ) {
     return (
       <main className="registration-confirm-page">
@@ -203,6 +229,23 @@ export default function RegistrationSuccessPage() {
 
           <p>
             Loading registration...
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="registration-confirm-page">
+        <section className="registration-confirm-card">
+          <LoaderCircle
+            className="button-spinner"
+            size={38}
+          />
+
+          <p>
+            Redirecting to login...
           </p>
         </section>
       </main>

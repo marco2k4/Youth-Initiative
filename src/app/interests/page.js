@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useState,
 } from "react";
 
@@ -28,8 +27,13 @@ import {
   Utensils,
 } from "lucide-react";
 
-import { db } from "@/services/firebase";
-import { useAuth } from "@/contexts/AuthContext";
+import {
+  db,
+} from "@/services/firebase";
+
+import {
+  useAuth,
+} from "@/contexts/AuthContext";
 
 const interestOptions = [
   {
@@ -80,7 +84,8 @@ const interestOptions = [
 ];
 
 export default function InterestsPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
   const {
     user,
@@ -88,28 +93,72 @@ export default function InterestsPage() {
     loading: authLoading,
   } = useAuth();
 
-  const [selectedInterests, setSelectedInterests] =
-    useState([]);
+  if (authLoading) {
+    return (
+      <main className="onboarding-status">
+        <LoaderCircle
+          className="button-spinner"
+          size={36}
+        />
+      </main>
+    );
+  }
 
-  const [saving, setSaving] =
-    useState(false);
+  if (
+    !user ||
+    !student
+  ) {
+    return (
+      <main className="onboarding-status">
+        <p>
+          Account information could not be loaded.
+        </p>
+      </main>
+    );
+  }
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  return (
+    <InterestsForm
+      user={user}
+      student={student}
+      router={router}
+    />
+  );
+}
 
-  useEffect(() => {
-    if (
-      Array.isArray(student?.interests)
-    ) {
-      setSelectedInterests(
-        student.interests
-      );
-    }
-  }, [student]);
+function InterestsForm({
+  user,
+  student,
+  router,
+}) {
+  const [
+    selectedInterests,
+    setSelectedInterests,
+  ] = useState(
+    Array.isArray(
+      student.interests
+    )
+      ? student.interests
+      : []
+  );
 
-  function toggleInterest(interestId) {
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
+
+  function toggleInterest(
+    interestId
+  ) {
     setSelectedInterests(
-      (currentInterests) => {
+      (
+        currentInterests
+      ) => {
         if (
           currentInterests.includes(
             interestId
@@ -117,12 +166,14 @@ export default function InterestsPage() {
         ) {
           return currentInterests.filter(
             (interest) =>
-              interest !== interestId
+              interest !==
+              interestId
           );
         }
 
         if (
-          currentInterests.length >= 5
+          currentInterests.length >=
+          5
         ) {
           return currentInterests;
         }
@@ -137,11 +188,6 @@ export default function InterestsPage() {
 
   async function completeOnboarding() {
     try {
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
       setSaving(true);
       setErrorMessage("");
 
@@ -179,11 +225,8 @@ export default function InterestsPage() {
 
   async function skipInterests() {
     try {
-      if (!user) {
-        return;
-      }
-
       setSaving(true);
+      setErrorMessage("");
 
       await updateDoc(
         doc(
@@ -193,6 +236,7 @@ export default function InterestsPage() {
         ),
         {
           interests: [],
+
           onboardingCompleted:
             true,
         }
@@ -202,6 +246,11 @@ export default function InterestsPage() {
         "/dashboard"
       );
     } catch (error) {
+      console.error(
+        "Skip interests error:",
+        error
+      );
+
       setErrorMessage(
         "Onboarding could not be completed."
       );
@@ -210,22 +259,9 @@ export default function InterestsPage() {
     }
   }
 
-  if (authLoading) {
-    return (
-      <main className="onboarding-status">
-        <LoaderCircle
-          className="button-spinner"
-          size={36}
-        />
-      </main>
-    );
-  }
-
   return (
     <main className="onboarding-page">
-
       <section className="onboarding-card interests-card">
-
         <div className="onboarding-progress">
           <div className="active" />
           <div className="active" />
@@ -240,17 +276,18 @@ export default function InterestsPage() {
         </h1>
 
         <p className="onboarding-description">
-          Select up to five areas you want
-          to explore.
+          Select up to five areas
+          you want to explore.
         </p>
 
         <span className="interest-counter">
-          {selectedInterests.length} / 5
-          selected
+          {
+            selectedInterests.length
+          }{" "}
+          / 5 selected
         </span>
 
         <div className="interest-grid">
-
           {interestOptions.map(
             (interest) => {
               const Icon =
@@ -263,7 +300,9 @@ export default function InterestsPage() {
 
               return (
                 <button
-                  key={interest.id}
+                  key={
+                    interest.id
+                  }
                   type="button"
                   className={`interest-card ${
                     selected
@@ -276,13 +315,16 @@ export default function InterestsPage() {
                     )
                   }
                 >
-
                   <div className="interest-icon">
-                    <Icon size={25} />
+                    <Icon
+                      size={25}
+                    />
                   </div>
 
                   <strong>
-                    {interest.title}
+                    {
+                      interest.title
+                    }
                   </strong>
 
                   <div className="interest-check">
@@ -292,25 +334,29 @@ export default function InterestsPage() {
                       />
                     )}
                   </div>
-
                 </button>
               );
             }
           )}
-
         </div>
 
         {errorMessage && (
           <div className="onboarding-error">
-            {errorMessage}
+            {
+              errorMessage
+            }
           </div>
         )}
 
         <button
           type="button"
           className="onboarding-primary-button"
-          disabled={saving}
-          onClick={completeOnboarding}
+          disabled={
+            saving
+          }
+          onClick={
+            completeOnboarding
+          }
         >
           {saving ? (
             <>
@@ -318,6 +364,7 @@ export default function InterestsPage() {
                 size={19}
                 className="button-spinner"
               />
+
               Saving...
             </>
           ) : (
@@ -328,14 +375,16 @@ export default function InterestsPage() {
         <button
           type="button"
           className="onboarding-skip"
-          disabled={saving}
-          onClick={skipInterests}
+          disabled={
+            saving
+          }
+          onClick={
+            skipInterests
+          }
         >
           Skip for now
         </button>
-
       </section>
-
     </main>
   );
 }

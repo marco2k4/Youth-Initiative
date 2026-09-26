@@ -36,26 +36,29 @@ export default function AdminGuard({
   const pathname =
     usePathname();
 
-  const [
-    verified,
-    setVerified,
-  ] = useState(false);
+  const isLoginPage =
+    pathname ===
+    "/admin/login";
 
   const [
-    checking,
-    setChecking,
-  ] = useState(true);
+    verifiedPath,
+    setVerifiedPath,
+  ] = useState(null);
 
   useEffect(() => {
-    if (
-      pathname ===
-      "/admin/login"
-    ) {
-      setVerified(true);
-      setChecking(false);
+    /*
+      The login page itself does not require
+      administrator verification.
+    */
 
-      return;
+    if (
+      isLoginPage
+    ) {
+      return undefined;
     }
+
+    let active =
+      true;
 
     const unsubscribe =
       onAuthStateChanged(
@@ -63,10 +66,20 @@ export default function AdminGuard({
         async (
           firebaseUser
         ) => {
+          if (
+            !active
+          ) {
+            return;
+          }
+
           try {
             if (
               !firebaseUser
             ) {
+              setVerifiedPath(
+                null
+              );
+
               router.replace(
                 "/admin/login"
               );
@@ -75,8 +88,9 @@ export default function AdminGuard({
             }
 
             /*
-              adminFetch sends both:
-              - Firebase Auth token
+              adminFetch sends:
+
+              - Firebase Authentication token
               - Firebase App Check token
             */
 
@@ -84,7 +98,8 @@ export default function AdminGuard({
               await adminFetch(
                 "/api/admin/auth/verify",
                 {
-                  method: "POST",
+                  method:
+                    "POST",
                 }
               );
 
@@ -95,16 +110,28 @@ export default function AdminGuard({
                 auth
               );
 
-              router.replace(
-                "/admin/login"
-              );
+              if (
+                active
+              ) {
+                setVerifiedPath(
+                  null
+                );
+
+                router.replace(
+                  "/admin/login"
+                );
+              }
 
               return;
             }
 
-            setVerified(
-              true
-            );
+            if (
+              active
+            ) {
+              setVerifiedPath(
+                pathname
+              );
+            }
           } catch (error) {
             console.error(
               "Admin guard error:",
@@ -116,36 +143,55 @@ export default function AdminGuard({
                 auth
               );
             } catch {
-              // Ignore sign-out failure.
+              // Ignore sign-out cleanup failure.
             }
 
-            router.replace(
-              "/admin/login"
-            );
-          } finally {
-            setChecking(
-              false
-            );
+            if (
+              active
+            ) {
+              setVerifiedPath(
+                null
+              );
+
+              router.replace(
+                "/admin/login"
+              );
+            }
           }
         }
       );
 
-    return unsubscribe;
+    return () => {
+      active =
+        false;
+
+      unsubscribe();
+    };
   }, [
+    isLoginPage,
     pathname,
     router,
   ]);
 
+  /*
+    Never guard the login page itself.
+  */
+
   if (
-    pathname ===
-    "/admin/login"
+    isLoginPage
   ) {
     return children;
   }
 
+  /*
+    Show protected admin content only
+    after this exact route has passed
+    server-side administrator verification.
+  */
+
   if (
-    checking ||
-    !verified
+    verifiedPath !==
+    pathname
   ) {
     return (
       <main className="admin-guard-loading">

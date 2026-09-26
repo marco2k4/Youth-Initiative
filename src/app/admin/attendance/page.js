@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+
 import {
   LoaderCircle,
   QrCode,
@@ -288,9 +290,12 @@ export default function AdminAttendancePage() {
               the attendance scanner.
             </p>
 
-            <img
+            <Image
               src={qrImage}
               alt="Workshop attendance QR code"
+              width={380}
+              height={380}
+              unoptimized
             />
 
             <div className="attendance-qr-active">

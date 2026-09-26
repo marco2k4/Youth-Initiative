@@ -27,26 +27,50 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getWorkshopImage } from "@/utils/getWorkshopImage";
 
 export default function CompletedWorkshopsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+  } = useAuth();
 
-  const [registrations, setRegistrations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchText, setSearchText] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [
+    registrations,
+    setRegistrations,
+  ] = useState([]);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    searchText,
+    setSearchText,
+  ] = useState("");
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
   useEffect(() => {
+    if (
+      authLoading ||
+      !user
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
     async function loadCompletedWorkshops() {
       try {
-        if (!user) {
-          return;
-        }
-
-        const response = 
+        const response =
           await studentFetch(
             "/api/registrations"
           );
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
         if (!response.ok) {
           throw new Error(
@@ -55,67 +79,98 @@ export default function CompletedWorkshopsPage() {
           );
         }
 
-        const completed = data.registrations.filter(
-          (registration) =>
-            registration.status === "completed" &&
-            registration.workshop
-        );
+        const completed =
+          data.registrations.filter(
+            (registration) =>
+              registration.status ===
+                "completed" &&
+              registration.workshop
+          );
 
-        setRegistrations(completed);
+        if (!cancelled) {
+          setRegistrations(
+            completed
+          );
+        }
       } catch (error) {
         console.error(
           "Load completed workshops error:",
           error
         );
 
-        setErrorMessage(
-          error.message ||
-            "Completed workshops could not be loaded."
-        );
+        if (!cancelled) {
+          setErrorMessage(
+            error.message ||
+              "Completed workshops could not be loaded."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    if (!authLoading) {
-      if (user) {
-        loadCompletedWorkshops();
-      } else {
-        setLoading(false);
-      }
-    }
-  }, [user, authLoading]);
+    loadCompletedWorkshops();
 
-  const filteredRegistrations = useMemo(() => {
-    const searchValue = searchText
-      .trim()
-      .toLowerCase();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    authLoading,
+  ]);
 
-    return registrations.filter((registration) => {
-      const workshop = registration.workshop;
+  const filteredRegistrations =
+    useMemo(() => {
+      const searchValue =
+        searchText
+          .trim()
+          .toLowerCase();
 
-      return (
-        !searchValue ||
-        workshop.title
-          ?.toLowerCase()
-          .includes(searchValue) ||
-        workshop.category
-          ?.toLowerCase()
-          .includes(searchValue) ||
-        workshop.programArea
-          ?.toLowerCase()
-          .includes(searchValue)
+      return registrations.filter(
+        (registration) => {
+          const workshop =
+            registration.workshop;
+
+          return (
+            !searchValue ||
+            workshop.title
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            workshop.category
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            workshop.programArea
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              )
+          );
+        }
       );
-    });
-  }, [registrations, searchText]);
+    }, [
+      registrations,
+      searchText,
+    ]);
 
-  if (!authLoading && !user) {
+  if (
+    !authLoading &&
+    !user
+  ) {
     return (
       <main className="completed-workshops-status">
-        <h1>Login Required</h1>
+        <h1>
+          Login Required
+        </h1>
 
         <p>
-          Log in to view your completed workshops.
+          Log in to view your
+          completed workshops.
         </p>
 
         <Link href="/login">
@@ -178,17 +233,23 @@ export default function CompletedWorkshopsPage() {
             </h1>
 
             <p>
-              Every completed workshop builds your skills,
-              XP and achievement collection.
+              Every completed
+              workshop builds your
+              skills, XP and
+              achievement collection.
             </p>
           </div>
 
           <div className="completed-summary-card">
-            <CheckCircle2 size={25} />
+            <CheckCircle2
+              size={25}
+            />
 
             <div>
               <strong>
-                {registrations.length}
+                {
+                  registrations.length
+                }
               </strong>
 
               <span>
@@ -214,14 +275,23 @@ export default function CompletedWorkshopsPage() {
         </div>
 
         <div className="registered-workshop-search">
-          <Search size={19} />
+          <Search
+            size={19}
+          />
 
           <input
             type="search"
             placeholder="Search completed workshops..."
-            value={searchText}
-            onChange={(event) =>
-              setSearchText(event.target.value)
+            value={
+              searchText
+            }
+            onChange={(
+              event
+            ) =>
+              setSearchText(
+                event.target
+                  .value
+              )
             }
           />
         </div>
@@ -234,25 +304,31 @@ export default function CompletedWorkshopsPage() {
             />
 
             <p>
-              Loading completed workshops...
+              Loading completed
+              workshops...
             </p>
           </div>
         ) : errorMessage ? (
           <div className="student-workshop-error">
             {errorMessage}
           </div>
-        ) : filteredRegistrations.length === 0 ? (
+        ) : filteredRegistrations.length ===
+          0 ? (
           <div className="completed-workshops-empty">
-            <Trophy size={52} />
+            <Trophy
+              size={52}
+            />
 
             <h2>
-              Your journey is just beginning
+              Your journey is just
+              beginning
             </h2>
 
             <p>
-              Complete your first registered workshop
-              and scan the attendance QR to unlock XP
-              and badges.
+              Complete your first
+              registered workshop and
+              scan the attendance QR to
+              unlock XP and badges.
             </p>
 
             <Link href="/workshops">
@@ -262,10 +338,16 @@ export default function CompletedWorkshopsPage() {
         ) : (
           <div className="completed-workshops-grid">
             {filteredRegistrations.map(
-              (registration) => (
+              (
+                registration
+              ) => (
                 <CompletedWorkshopCard
-                  key={registration.id}
-                  registration={registration}
+                  key={
+                    registration.id
+                  }
+                  registration={
+                    registration
+                  }
                 />
               )
             )}
@@ -275,31 +357,56 @@ export default function CompletedWorkshopsPage() {
 
       <nav className="student-bottom-navigation">
         <Link href="/dashboard">
-          <Home size={20} />
-          <span>Home</span>
+          <Home
+            size={20}
+          />
+
+          <span>
+            Home
+          </span>
         </Link>
 
         <Link
           href="/workshops"
           className="active"
         >
-          <BookOpen size={20} />
-          <span>Workshops</span>
+          <BookOpen
+            size={20}
+          />
+
+          <span>
+            Workshops
+          </span>
         </Link>
 
         <Link href="/journey">
-          <Map size={20} />
-          <span>Journey</span>
+          <Map
+            size={20}
+          />
+
+          <span>
+            Journey
+          </span>
         </Link>
 
         <Link href="/badges">
-          <Trophy size={20} />
-          <span>Badges</span>
+          <Trophy
+            size={20}
+          />
+
+          <span>
+            Badges
+          </span>
         </Link>
 
         <Link href="/profile">
-          <UserRound size={20} />
-          <span>Profile</span>
+          <UserRound
+            size={20}
+          />
+
+          <span>
+            Profile
+          </span>
         </Link>
       </nav>
     </main>
@@ -309,16 +416,23 @@ export default function CompletedWorkshopsPage() {
 function CompletedWorkshopCard({
   registration,
 }) {
-  const workshop = registration.workshop;
+  const workshop =
+    registration.workshop;
 
   const workshopImage =
     workshop.image ||
-    getWorkshopImage(workshop.category);
+    getWorkshopImage(
+      workshop.category
+    );
 
   const completedDate =
-    registration.completedAt?._seconds
+    registration.completedAt
+      ?._seconds
       ? new Date(
-          registration.completedAt._seconds * 1000
+          registration
+            .completedAt
+            ._seconds *
+            1000
         ).toLocaleDateString()
       : "Completed";
 
@@ -326,8 +440,12 @@ function CompletedWorkshopCard({
     <article className="completed-workshop-card">
       <div className="completed-workshop-image-wrapper">
         <Image
-          src={workshopImage}
-          alt={workshop.title}
+          src={
+            workshopImage
+          }
+          alt={
+            workshop.title
+          }
           fill
           sizes="(max-width: 700px) 100vw, 420px"
           className="completed-workshop-image"
@@ -336,13 +454,22 @@ function CompletedWorkshopCard({
         <div className="completed-workshop-overlay" />
 
         <span className="completed-status-badge">
-          <CheckCircle2 size={14} />
+          <CheckCircle2
+            size={14}
+          />
+
           Completed
         </span>
 
         <div className="completed-card-xp">
-          <Star size={16} />
-          +{workshop.xpReward || 100} XP
+          <Star
+            size={16}
+          />
+
+          +
+          {workshop.xpReward ||
+            100}{" "}
+          XP
         </div>
       </div>
 
@@ -358,13 +485,20 @@ function CompletedWorkshopCard({
 
         <div className="completed-workshop-information">
           <div>
-            <CalendarDays size={17} />
+            <CalendarDays
+              size={17}
+            />
 
-            Completed {completedDate}
+            Completed{" "}
+            {
+              completedDate
+            }
           </div>
 
           <div>
-            <MapPin size={17} />
+            <MapPin
+              size={17}
+            />
 
             {workshop.location ||
               (workshop.learningMode ===
@@ -376,7 +510,9 @@ function CompletedWorkshopCard({
 
         <div className="completed-workshop-footer">
           <div>
-            <Award size={18} />
+            <Award
+              size={18}
+            />
 
             <span>
               Achievement earned

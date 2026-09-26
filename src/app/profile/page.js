@@ -26,8 +26,13 @@ import {
   signOut,
 } from "firebase/auth";
 
-import { auth } from "@/services/firebase";
-import { useAuth } from "@/contexts/AuthContext";
+import {
+  auth,
+} from "@/services/firebase";
+
+import {
+  useAuth,
+} from "@/contexts/AuthContext";
 
 export default function ProfilePage() {
   const router =
@@ -40,7 +45,9 @@ export default function ProfilePage() {
   } = useAuth();
 
   async function handleLogout() {
-    await signOut(auth);
+    await signOut(
+      auth
+    );
 
     router.replace(
       "/login"
@@ -122,7 +129,10 @@ export default function ProfilePage() {
               href="/edit-profile"
               className="profile-edit-button"
             >
-              <Edit3 size={16} />
+              <Edit3
+                size={16}
+              />
+
               Edit Profile
             </Link>
 
@@ -140,7 +150,8 @@ export default function ProfilePage() {
           <ProfileStat
             icon={Zap}
             value={
-              student?.totalXp || 0
+              student?.totalXp ||
+              0
             }
             label="Total XP"
           />
@@ -148,7 +159,8 @@ export default function ProfilePage() {
           <ProfileStat
             icon={Trophy}
             value={
-              student?.level || 1
+              student?.level ||
+              1
             }
             label="Level"
           />
@@ -156,7 +168,8 @@ export default function ProfilePage() {
           <ProfileStat
             icon={Award}
             value={
-              student?.badgeCount || 0
+              student?.badgeCount ||
+              0
             }
             label="Badges"
           />
@@ -242,7 +255,7 @@ export default function ProfilePage() {
                 </span>
 
                 <h2>
-                  What I'm Exploring
+                  What I&apos;m Exploring
                 </h2>
               </div>
 
@@ -334,9 +347,14 @@ export default function ProfilePage() {
         <button
           type="button"
           className="profile-logout-button"
-          onClick={handleLogout}
+          onClick={
+            handleLogout
+          }
         >
-          <LogOut size={17} />
+          <LogOut
+            size={17}
+          />
+
           Log Out
         </button>
 
@@ -346,31 +364,56 @@ export default function ProfilePage() {
       <nav className="student-bottom-navigation">
 
         <Link href="/dashboard">
-          <Home size={20} />
-          <span>Home</span>
+          <Home
+            size={20}
+          />
+
+          <span>
+            Home
+          </span>
         </Link>
 
         <Link href="/workshops">
-          <BookOpen size={20} />
-          <span>Workshops</span>
+          <BookOpen
+            size={20}
+          />
+
+          <span>
+            Workshops
+          </span>
         </Link>
 
         <Link href="/journey">
-          <Map size={20} />
-          <span>Journey</span>
+          <Map
+            size={20}
+          />
+
+          <span>
+            Journey
+          </span>
         </Link>
 
         <Link href="/badges">
-          <Trophy size={20} />
-          <span>Badges</span>
+          <Trophy
+            size={20}
+          />
+
+          <span>
+            Badges
+          </span>
         </Link>
 
         <Link
           href="/profile"
           className="active"
         >
-          <UserRound size={20} />
-          <span>Profile</span>
+          <UserRound
+            size={20}
+          />
+
+          <span>
+            Profile
+          </span>
         </Link>
 
       </nav>
@@ -387,7 +430,9 @@ function ProfileStat({
 }) {
   return (
     <div className="profile-stat-card">
-      <Icon size={21} />
+      <Icon
+        size={21}
+      />
 
       <strong>
         {value}
@@ -411,7 +456,9 @@ function ProfileInformation({
     <div className="profile-information-row">
 
       <div className="profile-information-icon">
-        <Icon size={18} />
+        <Icon
+          size={18}
+        />
       </div>
 
       <div>
@@ -438,15 +485,24 @@ function ProfileInformation({
 function formatLearningMode(
   mode
 ) {
-  if (mode === "in-person") {
+  if (
+    mode ===
+    "in-person"
+  ) {
     return "In Person";
   }
 
-  if (mode === "online") {
+  if (
+    mode ===
+    "online"
+  ) {
     return "Online";
   }
 
-  if (mode === "both") {
+  if (
+    mode ===
+    "both"
+  ) {
     return "Online & In Person";
   }
 
@@ -461,7 +517,9 @@ function formatInterest(
     .split(" ")
     .map(
       (word) =>
-        word.charAt(0).toUpperCase() +
+        word
+          .charAt(0)
+          .toUpperCase() +
         word.slice(1)
     )
     .join(" ");

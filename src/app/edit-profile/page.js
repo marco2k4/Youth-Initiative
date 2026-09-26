@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useState,
 } from "react";
 
@@ -20,8 +19,13 @@ import {
   LoaderCircle,
 } from "lucide-react";
 
-import { db } from "@/services/firebase";
-import { useAuth } from "@/contexts/AuthContext";
+import {
+  db,
+} from "@/services/firebase";
+
+import {
+  useAuth,
+} from "@/contexts/AuthContext";
 
 const availableInterests = [
   "coding",
@@ -45,29 +49,67 @@ export default function EditProfilePage() {
     loading,
   } = useAuth();
 
-  const [learningMode, setLearningMode] =
-    useState("");
+  if (loading) {
+    return (
+      <main className="profile-state">
+        Loading...
+      </main>
+    );
+  }
 
-  const [interests, setInterests] =
-    useState([]);
+  if (
+    !user ||
+    !student
+  ) {
+    return (
+      <main className="profile-state">
+        Profile unavailable.
+      </main>
+    );
+  }
 
-  const [saving, setSaving] =
-    useState(false);
+  return (
+    <EditProfileForm
+      user={user}
+      student={student}
+      router={router}
+    />
+  );
+}
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+function EditProfileForm({
+  user,
+  student,
+  router,
+}) {
+  const [
+    learningMode,
+    setLearningMode,
+  ] = useState(
+    student.learningMode ||
+      ""
+  );
 
-  useEffect(() => {
-    if (student) {
-      setLearningMode(
-        student.learningMode || ""
-      );
+  const [
+    interests,
+    setInterests,
+  ] = useState(
+    Array.isArray(
+      student.interests
+    )
+      ? student.interests
+      : []
+  );
 
-      setInterests(
-        student.interests || []
-      );
-    }
-  }, [student]);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
   function toggleInterest(
     interest
@@ -105,10 +147,6 @@ export default function EditProfilePage() {
     event.preventDefault();
 
     try {
-      if (!user) {
-        return;
-      }
-
       setSaving(true);
       setErrorMessage("");
 
@@ -141,19 +179,9 @@ export default function EditProfilePage() {
     }
   }
 
-  if (loading) {
-    return (
-      <main className="profile-state">
-        Loading...
-      </main>
-    );
-  }
-
   return (
     <main className="edit-profile-page">
-
       <section className="edit-profile-card">
-
         <button
           type="button"
           className="edit-profile-back"
@@ -161,7 +189,10 @@ export default function EditProfilePage() {
             router.back()
           }
         >
-          <ArrowLeft size={19} />
+          <ArrowLeft
+            size={19}
+          />
+
           Back
         </button>
 
@@ -174,30 +205,41 @@ export default function EditProfilePage() {
         </h1>
 
         <p>
-          Update how you prefer to learn
-          and the areas you want to explore.
+          Update how you prefer
+          to learn and the areas
+          you want to explore.
         </p>
 
-
         <form
-          onSubmit={saveProfile}
+          onSubmit={
+            saveProfile
+          }
           className="edit-profile-form"
         >
-
           <div className="edit-profile-field">
-
             <label>
               Learning Preference
             </label>
 
             <div className="edit-learning-grid">
-
               {[
-                ["in-person", "In Person"],
-                ["online", "Online"],
-                ["both", "Both"],
+                [
+                  "in-person",
+                  "In Person",
+                ],
+                [
+                  "online",
+                  "Online",
+                ],
+                [
+                  "both",
+                  "Both",
+                ],
               ].map(
-                ([value, label]) => (
+                ([
+                  value,
+                  label,
+                ]) => (
                   <button
                     key={value}
                     type="button"
@@ -224,26 +266,24 @@ export default function EditProfilePage() {
                   </button>
                 )
               )}
-
             </div>
-
           </div>
 
-
           <div className="edit-profile-field">
-
             <div className="edit-interest-heading">
               <label>
                 Interests
               </label>
 
               <span>
-                {interests.length} / 5
+                {
+                  interests.length
+                }{" "}
+                / 5
               </span>
             </div>
 
             <div className="edit-interest-grid">
-
               {availableInterests.map(
                 (interest) => {
                   const selected =
@@ -253,7 +293,9 @@ export default function EditProfilePage() {
 
                   return (
                     <button
-                      key={interest}
+                      key={
+                        interest
+                      }
                       type="button"
                       className={
                         selected
@@ -279,23 +321,23 @@ export default function EditProfilePage() {
                   );
                 }
               )}
-
             </div>
-
           </div>
-
 
           {errorMessage && (
             <div className="onboarding-error">
-              {errorMessage}
+              {
+                errorMessage
+              }
             </div>
           )}
-
 
           <button
             type="submit"
             className="edit-profile-save"
-            disabled={saving}
+            disabled={
+              saving
+            }
           >
             {saving ? (
               <>
@@ -310,15 +352,11 @@ export default function EditProfilePage() {
               "Save Changes"
             )}
           </button>
-
         </form>
-
       </section>
-
     </main>
   );
 }
-
 
 function formatInterest(
   interest
@@ -327,7 +365,9 @@ function formatInterest(
     .split(" ")
     .map(
       (word) =>
-        word.charAt(0).toUpperCase() +
+        word
+          .charAt(0)
+          .toUpperCase() +
         word.slice(1)
     )
     .join(" ");

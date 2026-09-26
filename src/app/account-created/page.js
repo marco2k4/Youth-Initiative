@@ -2,48 +2,85 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+
+import {
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import {
   CheckCircle2,
   Copy,
 } from "lucide-react";
 
+function subscribe() {
+  return () => {};
+}
+
+function getClientSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
 export default function AccountCreatedPage() {
-  const [account, setAccount] = useState(null);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    const savedAccount =
-      sessionStorage.getItem("createdAccount");
-
-    if (savedAccount) {
-      try {
-        setAccount(JSON.parse(savedAccount));
-      } catch {
-        setAccount(null);
-      }
-    }
-  }, []);
-
-  const youthId =
-    account?.youthId || "Youth ID unavailable";
-
-  const copyYouthId = async () => {
-    if (!account?.youthId) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(
-      account.youthId
+  const isClient =
+    useSyncExternalStore(
+      subscribe,
+      getClientSnapshot,
+      getServerSnapshot
     );
 
-    setCopied(true);
+  const [copied, setCopied] =
+    useState(false);
 
-    setTimeout(() => {
-      setCopied(false);
-    }, 1800);
-  };
+  const account =
+    useMemo(() => {
+      if (!isClient) {
+        return null;
+      }
+
+      const savedAccount =
+        window.sessionStorage.getItem(
+          "createdAccount"
+        );
+
+      if (!savedAccount) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(
+          savedAccount
+        );
+      } catch {
+        return null;
+      }
+    }, [isClient]);
+
+  const youthId =
+    account?.youthId ||
+    "Youth ID unavailable";
+
+  const copyYouthId =
+    async () => {
+      if (!account?.youthId) {
+        return;
+      }
+
+      await navigator.clipboard.writeText(
+        account.youthId
+      );
+
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 1800);
+    };
 
   return (
     <main className="account-created-page">
@@ -58,37 +95,55 @@ export default function AccountCreatedPage() {
         />
 
         <div className="account-success-icon">
-          <CheckCircle2 size={56} />
+          <CheckCircle2
+            size={56}
+          />
         </div>
 
-        <h1>Account Created Successfully!</h1>
+        <h1>
+          Account Created Successfully!
+        </h1>
 
         <p>
-          The student account is now active. Use the
-          Youth Initiative ID below with the password
-          that was just created.
+          The student account is now active.
+          Use the Youth Initiative ID below
+          with the password that was just
+          created.
         </p>
 
         <div className="youth-id-result">
-          <span>Youth Initiative ID</span>
+          <span>
+            Youth Initiative ID
+          </span>
 
           <div>
-            <strong>{youthId}</strong>
+            <strong>
+              {youthId}
+            </strong>
 
             <button
               type="button"
-              onClick={copyYouthId}
-              disabled={!account?.youthId}
+              onClick={
+                copyYouthId
+              }
+              disabled={
+                !account?.youthId
+              }
             >
-              <Copy size={18} />
-              {copied ? "Copied" : "Copy"}
+              <Copy
+                size={18}
+              />
+
+              {copied
+                ? "Copied"
+                : "Copy"}
             </button>
           </div>
         </div>
 
         <div className="account-created-warning">
-          Save this ID securely. The student needs it
-          every time they log in.
+          Save this ID securely. The student
+          needs it every time they log in.
         </div>
 
         <Link

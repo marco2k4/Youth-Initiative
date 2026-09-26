@@ -33,12 +33,19 @@ export default function ParentalVerificationPage() {
     useRouter();
 
   const requestId =
-    params.token;
+    typeof params?.token ===
+    "string"
+      ? params.token
+      : "";
 
   const token =
     searchParams.get(
       "token"
     );
+
+  const linkIncomplete =
+    !requestId ||
+    !token;
 
   const [
     status,
@@ -58,13 +65,23 @@ export default function ParentalVerificationPage() {
   ] = useState(false);
 
   useEffect(() => {
+    if (
+      linkIncomplete
+    ) {
+      return;
+    }
+
+    let cancelled =
+      false;
+
     async function checkLink() {
       try {
         /*
-          Initial link verification uses a
-          normal App Check token.
+          Initial link verification uses
+          a normal App Check token.
 
-          Nothing is consumed at this stage.
+          Nothing is consumed at this
+          stage.
         */
 
         const response =
@@ -97,10 +114,20 @@ export default function ParentalVerificationPage() {
           );
         }
 
-        setStatus(
-          "ready"
-        );
+        if (
+          !cancelled
+        ) {
+          setStatus(
+            "ready"
+          );
+        }
       } catch (error) {
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
         setErrorMessage(
           error.message ||
             "Verification link could not be validated."
@@ -112,23 +139,16 @@ export default function ParentalVerificationPage() {
       }
     }
 
-    if (
-      requestId &&
-      token
-    ) {
-      checkLink();
-    } else {
-      setErrorMessage(
-        "Verification link is incomplete."
-      );
+    checkLink();
 
-      setStatus(
-        "error"
-      );
-    }
+    return () => {
+      cancelled =
+        true;
+    };
   }, [
     requestId,
     token,
+    linkIncomplete,
   ]);
 
   async function approveReset() {
@@ -211,7 +231,31 @@ export default function ParentalVerificationPage() {
   }
 
   if (
-    status === "loading"
+    linkIncomplete
+  ) {
+    return (
+      <main className="password-flow-page">
+        <section className="password-flow-card password-status-card">
+          <TriangleAlert
+            size={45}
+            className="password-error-icon"
+          />
+
+          <h1>
+            Link unavailable
+          </h1>
+
+          <p>
+            Verification link is incomplete.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  if (
+    status ===
+    "loading"
   ) {
     return (
       <main className="password-flow-page">
@@ -230,7 +274,8 @@ export default function ParentalVerificationPage() {
   }
 
   if (
-    status === "error"
+    status ===
+    "error"
   ) {
     return (
       <main className="password-flow-page">

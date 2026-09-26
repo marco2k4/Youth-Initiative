@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
+
 import {
-  useEffect,
+  useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import {
@@ -18,11 +20,53 @@ import {
   appCheckFetch,
 } from "@/services/appCheckApi";
 
+const STORAGE_KEY =
+  "pendingRegistration";
+
+const STORAGE_UPDATE_EVENT =
+  "pending-registration-updated";
+
+function subscribe(callback) {
+  window.addEventListener(
+    "storage",
+    callback
+  );
+
+  window.addEventListener(
+    STORAGE_UPDATE_EVENT,
+    callback
+  );
+
+  return () => {
+    window.removeEventListener(
+      "storage",
+      callback
+    );
+
+    window.removeEventListener(
+      STORAGE_UPDATE_EVENT,
+      callback
+    );
+  };
+}
+
+function getClientSnapshot() {
+  return window.sessionStorage.getItem(
+    STORAGE_KEY
+  );
+}
+
+function getServerSnapshot() {
+  return null;
+}
+
 export default function ConsentPendingPage() {
-  const [
-    registration,
-    setRegistration,
-  ] = useState(null);
+  const savedRegistration =
+    useSyncExternalStore(
+      subscribe,
+      getClientSnapshot,
+      getServerSnapshot
+    );
 
   const [
     resendStatus,
@@ -39,24 +83,22 @@ export default function ConsentPendingPage() {
     setIsResending,
   ] = useState(false);
 
-  useEffect(() => {
-    const savedRegistration =
-      sessionStorage.getItem(
-        "pendingRegistration"
-      );
+  const registration =
+    useMemo(() => {
+      if (!savedRegistration) {
+        return null;
+      }
 
-    if (savedRegistration) {
       try {
-        setRegistration(
-          JSON.parse(
-            savedRegistration
-          )
+        return JSON.parse(
+          savedRegistration
         );
       } catch {
-        setRegistration(null);
+        return null;
       }
-    }
-  }, []);
+    }, [
+      savedRegistration,
+    ]);
 
   const parentEmail =
     registration
@@ -67,98 +109,102 @@ export default function ConsentPendingPage() {
     registration?.firstName ||
     "the student";
 
-  const handleResend = async () => {
-    if (
-      isResending ||
-      !registration
-        ?.registrationId ||
-      !registration
-        ?.resendToken
-    ) {
-      return;
-    }
-
-    try {
-      setIsResending(true);
-
-      setResendStatus("");
-      setResendMessage("");
-
-      const response =
-        await appCheckFetch(
-          "/api/consent/resend",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              registrationId:
-                registration
-                  .registrationId,
-
-              resendToken:
-                registration
-                  .resendToken,
-            }),
-          }
-        );
-
-      const responseData =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          responseData.message ||
-            "The email could not be resent."
-        );
+  const handleResend =
+    async () => {
+      if (
+        isResending ||
+        !registration
+          ?.registrationId ||
+        !registration
+          ?.resendToken
+      ) {
+        return;
       }
 
-      setResendStatus(
-        "success"
-      );
+      try {
+        setIsResending(true);
 
-      setResendMessage(
-        "A new consent email has been sent successfully."
-      );
+        setResendStatus("");
+        setResendMessage("");
 
-      const updatedRegistration =
-        {
-          ...registration,
-          emailSent: true,
-        };
+        const response =
+          await appCheckFetch(
+            "/api/consent/resend",
+            {
+              method: "POST",
 
-      setRegistration(
-        updatedRegistration
-      );
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
 
-      sessionStorage.setItem(
-        "pendingRegistration",
-        JSON.stringify(
-          updatedRegistration
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Consent resend error:",
-        error
-      );
+              body:
+                JSON.stringify({
+                  registrationId:
+                    registration
+                      .registrationId,
 
-      setResendStatus(
-        "error"
-      );
+                  resendToken:
+                    registration
+                      .resendToken,
+                }),
+            }
+          );
 
-      setResendMessage(
-        error.message ||
-          "The email could not be resent. Please try again."
-      );
-    } finally {
-      setIsResending(false);
-    }
-  };
+        const responseData =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            responseData.message ||
+              "The email could not be resent."
+          );
+        }
+
+        setResendStatus(
+          "success"
+        );
+
+        setResendMessage(
+          "A new consent email has been sent successfully."
+        );
+
+        const updatedRegistration =
+          {
+            ...registration,
+            emailSent: true,
+          };
+
+        window.sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(
+            updatedRegistration
+          )
+        );
+
+        window.dispatchEvent(
+          new Event(
+            STORAGE_UPDATE_EVENT
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Consent resend error:",
+          error
+        );
+
+        setResendStatus(
+          "error"
+        );
+
+        setResendMessage(
+          error.message ||
+            "The email could not be resent. Please try again."
+        );
+      } finally {
+        setIsResending(false);
+      }
+    };
 
   return (
     <main className="consent-pending-page">
@@ -167,7 +213,10 @@ export default function ConsentPendingPage() {
           href="/register"
           className="consent-back-link"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft
+            size={20}
+          />
+
           Back
         </Link>
 
@@ -181,7 +230,9 @@ export default function ConsentPendingPage() {
         />
 
         <div className="consent-mail-icon">
-          <Mail size={37} />
+          <Mail
+            size={37}
+          />
         </div>
 
         <h1>
@@ -210,7 +261,9 @@ export default function ConsentPendingPage() {
         </Link>
 
         <div className="consent-information-box">
-          <CheckCircle2 size={25} />
+          <CheckCircle2
+            size={25}
+          />
 
           <p>
             {registration

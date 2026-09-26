@@ -50,12 +50,18 @@ export default function JourneyPage() {
     useState("");
 
   useEffect(() => {
+    if (
+      authLoading ||
+      !user
+    ) {
+      return;
+    }
+
+    let cancelled =
+      false;
+
     async function loadGameProgress() {
       try {
-        if (!user) {
-          return;
-        }
-
         const response =
           await studentFetch(
             "/api/gamification"
@@ -70,34 +76,48 @@ export default function JourneyPage() {
           );
         }
 
-        setGameData(
-          data.gamification
-        );
+        if (
+          !cancelled
+        ) {
+          setGameData(
+            data.gamification
+          );
+        }
       } catch (error) {
-        setErrorMessage(
-          error.message ||
-            "Progress could not be loaded."
-        );
+        if (
+          !cancelled
+        ) {
+          setErrorMessage(
+            error.message ||
+              "Progress could not be loaded."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (
+          !cancelled
+        ) {
+          setLoading(false);
+        }
       }
     }
 
-    if (!authLoading) {
-      if (user) {
-        loadGameProgress();
-      } else {
-        setLoading(false);
-      }
-    }
+    loadGameProgress();
+
+    return () => {
+      cancelled =
+        true;
+    };
   }, [
     user,
     authLoading,
   ]);
 
   if (
-    loading ||
-    authLoading
+    authLoading ||
+    (
+      user &&
+      loading
+    )
   ) {
     return (
       <main className="game-loading">

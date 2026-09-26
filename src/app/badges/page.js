@@ -102,12 +102,18 @@ export default function BadgesPage() {
   ] = useState("");
 
   useEffect(() => {
+    if (
+      authLoading ||
+      !user
+    ) {
+      return;
+    }
+
+    let cancelled =
+      false;
+
     async function loadBadges() {
       try {
-        if (!user) {
-          return;
-        }
-
         setErrorMessage("");
 
         const response =
@@ -125,31 +131,44 @@ export default function BadgesPage() {
           );
         }
 
-        setGameData(
-          data.gamification
-        );
+        if (
+          !cancelled
+        ) {
+          setGameData(
+            data.gamification
+          );
+        }
       } catch (error) {
         console.error(
           "Load badges error:",
           error
         );
 
-        setErrorMessage(
-          error.message ||
-            "Badge progress could not be loaded."
-        );
+        if (
+          !cancelled
+        ) {
+          setErrorMessage(
+            error.message ||
+              "Badge progress could not be loaded."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (
+          !cancelled
+        ) {
+          setLoading(
+            false
+          );
+        }
       }
     }
 
-    if (!authLoading) {
-      if (user) {
-        loadBadges();
-      } else {
-        setLoading(false);
-      }
-    }
+    loadBadges();
+
+    return () => {
+      cancelled =
+        true;
+    };
   }, [
     user,
     authLoading,
@@ -269,8 +288,11 @@ export default function BadgesPage() {
   }
 
   if (
-    loading ||
-    authLoading
+    authLoading ||
+    (
+      user &&
+      loading
+    )
   ) {
     return (
       <main className="badges-status-page">

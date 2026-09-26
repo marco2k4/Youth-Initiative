@@ -76,12 +76,18 @@ export default function DashboardPage() {
   ] = useState("");
 
   useEffect(() => {
+    if (
+      authLoading ||
+      !user
+    ) {
+      return;
+    }
+
+    let cancelled =
+      false;
+
     async function loadDashboard() {
       try {
-        if (!user) {
-          return;
-        }
-
         setLoading(true);
         setErrorMessage("");
 
@@ -147,6 +153,12 @@ export default function DashboardPage() {
           );
         }
 
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
         setGameData(
           gameResult.gamification
         );
@@ -166,22 +178,29 @@ export default function DashboardPage() {
           error
         );
 
-        setErrorMessage(
-          error.message ||
-            "Your dashboard could not be loaded."
-        );
+        if (
+          !cancelled
+        ) {
+          setErrorMessage(
+            error.message ||
+              "Your dashboard could not be loaded."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (
+          !cancelled
+        ) {
+          setLoading(false);
+        }
       }
     }
 
-    if (!authLoading) {
-      if (user) {
-        loadDashboard();
-      } else {
-        setLoading(false);
-      }
-    }
+    loadDashboard();
+
+    return () => {
+      cancelled =
+        true;
+    };
   }, [
     user,
     authLoading,
@@ -311,7 +330,10 @@ export default function DashboardPage() {
 
   if (
     authLoading ||
-    loading
+    (
+      user &&
+      loading
+    )
   ) {
     return (
       <main className="dashboard-state-page">

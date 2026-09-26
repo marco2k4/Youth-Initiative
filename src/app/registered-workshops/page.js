@@ -48,15 +48,21 @@ export default function RegisteredWorkshopsPage() {
     useState("");
 
   useEffect(() => {
+    if (
+      authLoading ||
+      !user
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
     async function loadRegistrations() {
       try {
-        if (!user) {
-          return;
-        }
-
-        const response = await studentFetch(
-          "/api/registrations"
-        );
+        const response =
+          await studentFetch(
+            "/api/registrations"
+          );
 
         const responseData =
           await response.json();
@@ -75,27 +81,34 @@ export default function RegisteredWorkshopsPage() {
               registration.workshop
           );
 
-        setRegistrations(
-          upcomingRegistrations
-        );
+        if (!cancelled) {
+          setRegistrations(
+            upcomingRegistrations
+          );
+        }
       } catch (error) {
-        setErrorMessage(
-          error.message ||
-            "Registered workshops could not be loaded."
-        );
+        if (!cancelled) {
+          setErrorMessage(
+            error.message ||
+              "Registered workshops could not be loaded."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    if (!authLoading) {
-      if (user) {
-        loadRegistrations();
-      } else {
-        setLoading(false);
-      }
-    }
-  }, [user, authLoading]);
+    loadRegistrations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    authLoading,
+  ]);
 
   const filteredRegistrations =
     useMemo(() => {
@@ -125,10 +138,15 @@ export default function RegisteredWorkshopsPage() {
       searchText,
     ]);
 
-  if (!authLoading && !user) {
+  if (
+    !authLoading &&
+    !user
+  ) {
     return (
       <main className="registered-workshops-status">
-        <h1>Login Required</h1>
+        <h1>
+          Login Required
+        </h1>
 
         <p>
           Log in to view your registered
@@ -347,7 +365,9 @@ function RegisteredWorkshopCard({
             workshop.programArea}
         </small>
 
-        <h2>{workshop.title}</h2>
+        <h2>
+          {workshop.title}
+        </h2>
 
         <div className="registered-workshop-information">
           <div>
