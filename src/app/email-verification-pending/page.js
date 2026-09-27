@@ -5,13 +5,20 @@ import Link from "next/link";
 
 import {
   MailCheck,
+  RefreshCw,
   ShieldCheck,
 } from "lucide-react";
 
 import {
+  useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
 } from "react";
+
+import {
+  appCheckFetch,
+} from "@/services/appCheckApi";
 
 const STORAGE_KEY =
   "pendingRegistration";
@@ -20,13 +27,27 @@ function subscribe() {
   return () => {};
 }
 
-function getServerSnapshot() {
+function getServerStorageSnapshot() {
   return null;
 }
 
-function getClientSnapshot() {
+function getClientStorageSnapshot() {
   return sessionStorage.getItem(
     STORAGE_KEY
+  );
+}
+
+function getServerRegistrationIdSnapshot() {
+  return "";
+}
+
+function getClientRegistrationIdSnapshot() {
+  return (
+    new URLSearchParams(
+      window.location.search
+    ).get(
+      "registrationId"
+    ) || ""
   );
 }
 
@@ -34,8 +55,15 @@ export default function EmailVerificationPendingPage() {
   const savedRegistration =
     useSyncExternalStore(
       subscribe,
-      getClientSnapshot,
-      getServerSnapshot
+      getClientStorageSnapshot,
+      getServerStorageSnapshot
+    );
+
+  const registrationIdFromUrl =
+    useSyncExternalStore(
+      subscribe,
+      getClientRegistrationIdSnapshot,
+      getServerRegistrationIdSnapshot
     );
 
   const registration =
@@ -64,6 +92,162 @@ export default function EmailVerificationPendingPage() {
   const email =
     registration?.email ||
     "";
+
+  const registrationId =
+    registration?.registrationId ||
+    registrationIdFromUrl ||
+    "";
+
+  const [
+    isResending,
+    setIsResending,
+  ] =
+    useState(false);
+
+  const [
+    resendMessage,
+    setResendMessage,
+  ] =
+    useState("");
+
+  const [
+    resendError,
+    setResendError,
+  ] =
+    useState("");
+
+  const [
+    cooldownSeconds,
+    setCooldownSeconds,
+  ] =
+    useState(0);
+
+  useEffect(() => {
+    if (
+      cooldownSeconds <=
+      0
+    ) {
+      return undefined;
+    }
+
+    const timer =
+      window.setInterval(
+        () => {
+          setCooldownSeconds(
+            (
+              current
+            ) =>
+              current >
+              0
+                ? current -
+                  1
+                : 0
+          );
+        },
+        1000
+      );
+
+    return () =>
+      window.clearInterval(
+        timer
+      );
+  }, [
+    cooldownSeconds,
+  ]);
+
+  const handleResend =
+    async () => {
+      if (
+        !registrationId ||
+        isResending
+      ) {
+        return;
+      }
+
+      try {
+        setIsResending(
+          true
+        );
+
+        setResendMessage(
+          ""
+        );
+
+        setResendError(
+          ""
+        );
+
+        const response =
+          await appCheckFetch(
+            "/api/email-verification/resend",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify(
+                  {
+                    registrationId,
+                  }
+                ),
+            }
+          );
+
+        const responseData =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+          if (
+            responseData
+              .retryAfterSeconds
+          ) {
+            setCooldownSeconds(
+              responseData
+                .retryAfterSeconds
+            );
+          }
+
+          throw new Error(
+            responseData.message ||
+              "We could not resend the verification email."
+          );
+        }
+
+        setResendMessage(
+          responseData.message ||
+            "A new verification email has been sent."
+        );
+
+        setCooldownSeconds(
+          responseData
+            .retryAfterSeconds ||
+            60
+        );
+      } catch (
+        error
+      ) {
+        console.error(
+          "Verification resend error:",
+          error
+        );
+
+        setResendError(
+          error?.message ||
+            "We could not resend the verification email. Please try again."
+        );
+      } finally {
+        setIsResending(
+          false
+        );
+      }
+    };
 
   return (
     <main className="set-password-page">
@@ -181,7 +365,7 @@ export default function EmailVerificationPendingPage() {
             color:
               "#666",
             marginBottom:
-              "22px",
+              "16px",
           }}
         >
           The verification link
@@ -190,6 +374,137 @@ export default function EmailVerificationPendingPage() {
           folder if you don&apos;t
           see the email.
         </p>
+
+        {resendMessage && (
+          <div
+            role="status"
+            style={{
+              marginBottom:
+                "14px",
+              padding:
+                "12px 14px",
+              borderRadius:
+                "8px",
+              background:
+                "#eef8f0",
+              lineHeight:
+                "1.5",
+              fontSize:
+                "14px",
+            }}
+          >
+            {resendMessage}
+          </div>
+        )}
+
+        {resendError && (
+          <div
+            role="alert"
+            style={{
+              marginBottom:
+                "14px",
+              padding:
+                "12px 14px",
+              borderRadius:
+                "8px",
+              background:
+                "#fff1f1",
+              lineHeight:
+                "1.5",
+              fontSize:
+                "14px",
+            }}
+          >
+            {resendError}
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="set-password-submit"
+          onClick={
+            handleResend
+          }
+          disabled={
+            !registrationId ||
+            isResending ||
+            cooldownSeconds >
+              0
+          }
+          style={{
+            width:
+              "100%",
+            border:
+              "none",
+            cursor:
+              !registrationId ||
+              isResending ||
+              cooldownSeconds >
+                0
+                ? "not-allowed"
+                : "pointer",
+            opacity:
+              !registrationId ||
+              isResending ||
+              cooldownSeconds >
+                0
+                ? 0.65
+                : 1,
+            marginBottom:
+              "12px",
+          }}
+        >
+          <span
+            style={{
+              display:
+                "inline-flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              gap:
+                "8px",
+            }}
+          >
+            <RefreshCw
+              size={18}
+              className={
+                isResending
+                  ? "button-spinner"
+                  : ""
+              }
+            />
+
+            {isResending
+              ? "Sending..."
+              : cooldownSeconds >
+                  0
+                ? `Resend available in ${cooldownSeconds}s`
+                : "Resend Verification Email"}
+          </span>
+        </button>
+
+        {!registrationId && (
+          <p
+            style={{
+              color:
+                "#8a1c1c",
+              fontSize:
+                "13px",
+              lineHeight:
+                "1.5",
+              margin:
+                "0 0 14px",
+            }}
+          >
+            This browser no longer
+            has your pending
+            registration details.
+            Use the verification
+            link from your email, or
+            return to registration.
+          </p>
+        )}
 
         <Link
           href="/login"

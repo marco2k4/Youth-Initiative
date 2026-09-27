@@ -14,6 +14,10 @@ import {
   requireAppCheck,
 } from "@/services/appCheckServer";
 
+import {
+  sendWelcomeEmail,
+} from "@/services/accountEmailServer";
+
 export const runtime =
   "nodejs";
 
@@ -282,7 +286,6 @@ export async function POST(
     /*
       Account activation is a
       sensitive one-time action.
-
       The frontend sends a
       limited-use App Check token,
       so consume it here.
@@ -606,6 +609,7 @@ export async function POST(
             the contact email itself
             is the Firebase Auth email.
           */
+
           emailVerified:
             true,
 
@@ -657,6 +661,7 @@ export async function POST(
           verified by the parental
           consent flow.
         */
+
         contactEmailVerified:
           registration.requiresParentalConsent ===
           true
@@ -802,6 +807,7 @@ export async function POST(
       /*
         These fields belonged to the
         older adult registration flow.
+
         Clearing them is safe if they
         happen to exist.
       */
@@ -833,7 +839,63 @@ export async function POST(
       }
     );
 
+    /*
+      Commit account creation FIRST.
+
+      Everything required for the
+      student account is complete
+      before any welcome email is
+      attempted.
+    */
+
     await batch.commit();
+
+    /*
+      Welcome email is best-effort.
+
+      Email delivery must never undo
+      or fail a successfully created
+      Firebase / Firestore account.
+    */
+
+    try {
+      const welcomeEmailResult =
+        await sendWelcomeEmail(
+          {
+            firstName:
+              registration.firstName,
+
+            email:
+              registration.email,
+
+            parentEmail:
+              registration.parentEmail ||
+              null,
+
+            youthId,
+
+            requiresParentalConsent:
+              registration.requiresParentalConsent ===
+              true,
+          }
+        );
+
+      if (
+        !welcomeEmailResult.success
+      ) {
+        console.error(
+          "Welcome email was not sent:",
+          welcomeEmailResult.error
+        );
+      }
+    } catch (
+      welcomeEmailError
+    ) {
+      console.error(
+        "Unexpected welcome email error:",
+        welcomeEmailError
+      );
+    }
 
     return Response.json(
       {

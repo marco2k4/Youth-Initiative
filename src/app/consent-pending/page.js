@@ -4,6 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import {
+  useRouter,
+} from "next/navigation";
+
+import {
   useMemo,
   useState,
   useSyncExternalStore,
@@ -12,6 +16,7 @@ import {
 import {
   ArrowLeft,
   CheckCircle2,
+  LoaderCircle,
   Mail,
   RefreshCw,
 } from "lucide-react";
@@ -20,85 +25,141 @@ import {
   appCheckFetch,
 } from "@/services/appCheckApi";
 
-const STORAGE_KEY =
-  "pendingRegistration";
+const PENDING_REGISTRATION_EVENT =
+  "pending-registration-change";
 
-const STORAGE_UPDATE_EVENT =
-  "pending-registration-updated";
+function subscribeToPendingRegistration(
+  callback
+) {
+  window.addEventListener(
+    PENDING_REGISTRATION_EVENT,
+    callback
+  );
 
-function subscribe(callback) {
   window.addEventListener(
     "storage",
     callback
   );
 
-  window.addEventListener(
-    STORAGE_UPDATE_EVENT,
-    callback
-  );
-
   return () => {
     window.removeEventListener(
-      "storage",
+      PENDING_REGISTRATION_EVENT,
       callback
     );
 
     window.removeEventListener(
-      STORAGE_UPDATE_EVENT,
+      "storage",
       callback
     );
   };
 }
 
-function getClientSnapshot() {
-  return window.sessionStorage.getItem(
-    STORAGE_KEY
+function getPendingRegistrationSnapshot() {
+  return (
+    sessionStorage.getItem(
+      "pendingRegistration"
+    ) || ""
   );
 }
 
-function getServerSnapshot() {
-  return null;
+function getPendingRegistrationServerSnapshot() {
+  return "";
+}
+
+function parsePendingRegistration(
+  value
+) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(
+      value
+    );
+  } catch {
+    return null;
+  }
+}
+
+function savePendingRegistration(
+  registration
+) {
+  sessionStorage.setItem(
+    "pendingRegistration",
+    JSON.stringify(
+      registration
+    )
+  );
+
+  window.dispatchEvent(
+    new Event(
+      PENDING_REGISTRATION_EVENT
+    )
+  );
 }
 
 export default function ConsentPendingPage() {
-  const savedRegistration =
+  const router =
+    useRouter();
+
+  /*
+    Read sessionStorage as an
+    external browser store.
+
+    This avoids calling setState
+    synchronously inside an effect,
+    which React 19's lint rules
+    reject.
+  */
+
+  const registrationSnapshot =
     useSyncExternalStore(
-      subscribe,
-      getClientSnapshot,
-      getServerSnapshot
+      subscribeToPendingRegistration,
+      getPendingRegistrationSnapshot,
+      getPendingRegistrationServerSnapshot
+    );
+
+  const registration =
+    useMemo(
+      () =>
+        parsePendingRegistration(
+          registrationSnapshot
+        ),
+      [
+        registrationSnapshot,
+      ]
     );
 
   const [
     resendStatus,
     setResendStatus,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     resendMessage,
     setResendMessage,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     isResending,
     setIsResending,
-  ] = useState(false);
+  ] =
+    useState(false);
 
-  const registration =
-    useMemo(() => {
-      if (!savedRegistration) {
-        return null;
-      }
+  const [
+    restartAvailable,
+    setRestartAvailable,
+  ] =
+    useState(false);
 
-      try {
-        return JSON.parse(
-          savedRegistration
-        );
-      } catch {
-        return null;
-      }
-    }, [
-      savedRegistration,
-    ]);
+  const [
+    isRestarting,
+    setIsRestarting,
+  ] =
+    useState(false);
 
   const parentEmail =
     registration
@@ -106,7 +167,8 @@ export default function ConsentPendingPage() {
     "the parent or guardian email address";
 
   const firstName =
-    registration?.firstName ||
+    registration
+      ?.firstName ||
     "the student";
 
   const handleResend =
@@ -122,16 +184,28 @@ export default function ConsentPendingPage() {
       }
 
       try {
-        setIsResending(true);
+        setIsResending(
+          true
+        );
 
-        setResendStatus("");
-        setResendMessage("");
+        setResendStatus(
+          ""
+        );
+
+        setResendMessage(
+          ""
+        );
+
+        setRestartAvailable(
+          false
+        );
 
         const response =
           await appCheckFetch(
             "/api/consent/resend",
             {
-              method: "POST",
+              method:
+                "POST",
 
               headers: {
                 "Content-Type":
@@ -139,22 +213,47 @@ export default function ConsentPendingPage() {
               },
 
               body:
-                JSON.stringify({
-                  registrationId:
-                    registration
-                      .registrationId,
+                JSON.stringify(
+                  {
+                    registrationId:
+                      registration
+                        .registrationId,
 
-                  resendToken:
-                    registration
-                      .resendToken,
-                }),
+                    resendToken:
+                      registration
+                        .resendToken,
+                  }
+                ),
             }
           );
 
         const responseData =
           await response.json();
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
+          /*
+            HTTP 410 means the
+            consent resend
+            authorization has
+            expired.
+
+            The stale registration
+            can then be explicitly
+            closed before starting
+            registration again.
+          */
+
+          if (
+            response.status ===
+            410
+          ) {
+            setRestartAvailable(
+              true
+            );
+          }
+
           throw new Error(
             responseData.message ||
               "The email could not be resent."
@@ -169,25 +268,27 @@ export default function ConsentPendingPage() {
           "A new consent email has been sent successfully."
         );
 
+        /*
+          Preserve all existing
+          registration information
+          and only update the email
+          delivery state.
+        */
+
         const updatedRegistration =
           {
             ...registration,
-            emailSent: true,
+
+            emailSent:
+              true,
           };
 
-        window.sessionStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(
-            updatedRegistration
-          )
+        savePendingRegistration(
+          updatedRegistration
         );
-
-        window.dispatchEvent(
-          new Event(
-            STORAGE_UPDATE_EVENT
-          )
-        );
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.error(
           "Consent resend error:",
           error
@@ -198,11 +299,128 @@ export default function ConsentPendingPage() {
         );
 
         setResendMessage(
-          error.message ||
+          error?.message ||
             "The email could not be resent. Please try again."
         );
       } finally {
-        setIsResending(false);
+        setIsResending(
+          false
+        );
+      }
+    };
+
+  const handleRestart =
+    async () => {
+      if (
+        isRestarting ||
+        !registration
+          ?.registrationId ||
+        !registration
+          ?.resendToken
+      ) {
+        return;
+      }
+
+      try {
+        setIsRestarting(
+          true
+        );
+
+        setResendStatus(
+          ""
+        );
+
+        setResendMessage(
+          ""
+        );
+
+        const response =
+          await appCheckFetch(
+            "/api/consent/restart",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify(
+                  {
+                    registrationId:
+                      registration
+                        .registrationId,
+
+                    resendToken:
+                      registration
+                        .resendToken,
+                  }
+                ),
+            }
+          );
+
+        const responseData =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            responseData.message ||
+              "The registration could not be restarted."
+          );
+        }
+
+        /*
+          The stale pending
+          registration has now
+          been safely marked
+          expired by the server.
+
+          Remove its browser
+          state before beginning
+          registration again.
+        */
+
+        sessionStorage.removeItem(
+          "pendingRegistration"
+        );
+
+        sessionStorage.removeItem(
+          "approvedConsent"
+        );
+
+        window.dispatchEvent(
+          new Event(
+            PENDING_REGISTRATION_EVENT
+          )
+        );
+
+        router.push(
+          "/register"
+        );
+      } catch (
+        error
+      ) {
+        console.error(
+          "Registration restart error:",
+          error
+        );
+
+        setResendStatus(
+          "error"
+        );
+
+        setResendMessage(
+          error?.message ||
+            "The registration could not be restarted. Please try again."
+        );
+      } finally {
+        setIsRestarting(
+          false
+        );
       }
     };
 
@@ -240,9 +458,9 @@ export default function ConsentPendingPage() {
         </h1>
 
         <p className="consent-introduction">
-          Since {firstName} is under 18,
-          we need consent from a parent or
-          guardian.
+          Since {firstName} is under
+          18, we need consent from a
+          parent or guardian.
         </p>
 
         <p className="consent-email-label">
@@ -267,7 +485,8 @@ export default function ConsentPendingPage() {
 
           <p>
             {registration
-              ?.emailSent === false
+              ?.emailSent ===
+            false
               ? "We could not deliver the first consent email. Please use the resend button below."
               : `An email has been sent with instructions to approve ${firstName}'s account. The link expires in 30 minutes.`}
           </p>
@@ -283,35 +502,70 @@ export default function ConsentPendingPage() {
             }
             role="status"
           >
-            {resendMessage}
+            {
+              resendMessage
+            }
           </p>
         )}
 
         <div className="consent-pending-actions">
-          {registration
-            ?.resendToken && (
+          {!restartAvailable &&
+            registration
+              ?.resendToken && (
+              <button
+                type="button"
+                className="consent-login-button"
+                disabled={
+                  isResending
+                }
+                onClick={
+                  handleResend
+                }
+              >
+                <RefreshCw
+                  size={18}
+                  className={
+                    isResending
+                      ? "button-spinner"
+                      : ""
+                  }
+                />
+
+                {isResending
+                  ? "Sending..."
+                  : "Resend Consent Email"}
+              </button>
+            )}
+
+          {restartAvailable && (
             <button
               type="button"
               className="consent-login-button"
               disabled={
-                isResending
+                isRestarting
               }
               onClick={
-                handleResend
+                handleRestart
               }
             >
-              <RefreshCw
-                size={18}
-                className={
-                  isResending
-                    ? "button-spinner"
-                    : ""
-                }
-              />
+              {isRestarting ? (
+                <>
+                  <LoaderCircle
+                    size={18}
+                    className="button-spinner"
+                  />
 
-              {isResending
-                ? "Sending..."
-                : "Resend Consent Email"}
+                  Restarting...
+                </>
+              ) : (
+                <>
+                  <RefreshCw
+                    size={18}
+                  />
+
+                  Start Registration Again
+                </>
+              )}
             </button>
           )}
 
@@ -323,9 +577,9 @@ export default function ConsentPendingPage() {
           </Link>
 
           <p>
-            Check the parent or guardian&apos;s
-            inbox and spam folder before
-            requesting another email.
+            {restartAvailable
+              ? "Your previous registration session has expired. Start again to create a fresh parental consent request."
+              : "Check the parent or guardian's inbox and spam folder before requesting another email."}
           </p>
         </div>
       </section>

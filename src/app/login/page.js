@@ -32,7 +32,6 @@ import {
   auth,
   db,
 } from "@/services/firebase";
-
 import * as Yup from "yup";
 
 const loginSchema = Yup.object({
@@ -53,7 +52,6 @@ const loginSchema = Yup.object({
       /^[A-Za-z0-9-]+$/,
       "Youth Initiative ID can only contain letters, numbers and hyphens."
     ),
-
   password: Yup.string()
     .required("Password is required.")
     .min(
@@ -418,6 +416,7 @@ export default function LoginPage() {
                             size={20}
                             className="button-spinner"
                           />
+
                           Logging in...
                         </>
                       ) : (
@@ -428,6 +427,13 @@ export default function LoginPage() {
                     <p className="forgot-password-text">
                       Forgot Password?{" "}
                       <Link href="/forgot-password">
+                        Click here
+                      </Link>
+                    </p>
+
+                    <p className="forgot-password-text">
+                      Forgot Youth Initiative ID?{" "}
+                      <Link href="/forgot-youth-id">
                         Click here
                       </Link>
                     </p>

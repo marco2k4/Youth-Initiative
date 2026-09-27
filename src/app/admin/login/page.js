@@ -36,27 +36,32 @@ export default function AdminLoginPage() {
   const [
     email,
     setEmail,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     password,
     setPassword,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     showPassword,
     setShowPassword,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     loading,
     setLoading,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     errorMessage,
     setErrorMessage,
-  ] = useState("");
+  ] =
+    useState("");
 
   async function handleLogin(
     event
@@ -74,58 +79,60 @@ export default function AdminLoginPage() {
 
       /*
         Step 1:
-        Authenticate through Firebase Auth.
+        Authenticate the administrator
+        through Firebase Authentication.
       */
 
       await signInWithEmailAndPassword(
         auth,
-        email
-          .trim()
-          .toLowerCase(),
+        email.trim(),
         password
       );
 
       /*
         Step 2:
-        Verify that the Firebase user is
-        actually an active administrator.
+        Verify that the authenticated
+        Firebase user is also an active
+        administrator in Firestore.
 
         adminFetch automatically sends:
+        - Firebase Auth ID token
+        - Firebase App Check token
 
-        Authorization:
-        Bearer <Firebase ID token>
-
-        X-Firebase-AppCheck:
-        <App Check token>
+        The previous implementation used
+        normal fetch(), so the App Check
+        token was missing.
       */
 
       const response =
         await adminFetch(
           "/api/admin/auth/verify",
           {
-            method: "POST",
+            method:
+              "POST",
           }
         );
 
       const data =
         await response.json();
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         await signOut(
           auth
         );
 
         throw new Error(
           data.message ||
-            "Administrator access could not be verified."
+            "Administrator authentication could not be verified."
         );
       }
 
       /*
-        This is UI convenience only.
-
-        Server authorization does not trust
-        this sessionStorage value.
+        Keep the non-sensitive admin
+        profile information available
+        for the current browser session.
       */
 
       sessionStorage.setItem(
@@ -135,35 +142,25 @@ export default function AdminLoginPage() {
         )
       );
 
+      /*
+        Move into the protected admin
+        portal after successful server
+        verification.
+      */
+
       router.replace(
         "/admin"
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Admin login error:",
         error
       );
 
-      /*
-        Make sure a Firebase user that failed
-        administrator verification does not
-        remain signed in.
-      */
-
-      if (
-        auth.currentUser
-      ) {
-        try {
-          await signOut(
-            auth
-          );
-        } catch {
-          // Ignore sign-out cleanup errors.
-        }
-      }
-
       setErrorMessage(
-        error.message ||
+        error?.message ||
           "Invalid admin credentials."
       );
     } finally {
@@ -215,8 +212,7 @@ export default function AdminLoginPage() {
                 event
               ) =>
                 setEmail(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
             />
@@ -241,8 +237,7 @@ export default function AdminLoginPage() {
                   event
                 ) =>
                   setPassword(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
               />
@@ -281,7 +276,9 @@ export default function AdminLoginPage() {
               className="admin-login-error"
               role="alert"
             >
-              {errorMessage}
+              {
+                errorMessage
+              }
             </div>
           )}
 

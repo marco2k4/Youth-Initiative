@@ -1,0 +1,406 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /*
+      ========================================
+      HELPER FUNCTIONS
+      ========================================
+    */
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isActiveStudent() {
+      return isSignedIn()
+
+        && exists(
+          /databases/$(database)/documents/students/$(request.auth.uid)
+        )
+
+        && get(
+          /databases/$(database)/documents/students/$(request.auth.uid)
+        ).data.role == 'student'
+
+        && get(
+          /databases/$(database)/documents/students/$(request.auth.uid)
+        ).data.accountStatus == 'active'
+
+        && get(
+          /databases/$(database)/documents/students/$(request.auth.uid)
+        ).data.firebaseUid == request.auth.uid
+
+        && (
+          get(
+            /databases/$(database)/documents/students/$(request.auth.uid)
+          ).data.requiresParentalConsent != true
+
+          ||
+
+          get(
+            /databases/$(database)/documents/students/$(request.auth.uid)
+          ).data.consentStatus == 'approved'
+        );
+    }
+
+    function isActiveAdmin() {
+      return isSignedIn()
+
+        && exists(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        )
+
+        && get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.role == 'admin'
+
+        && get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.status == 'active';
+    }
+
+
+    /*
+      ========================================
+      STUDENT PROFILE
+      ========================================
+
+      Students may only read their own
+      active profile.
+
+      Student creation happens through
+      protected server APIs using the
+      Firebase Admin SDK.
+
+      Students may only directly update
+      onboarding-related fields.
+    */
+
+    match /students/{studentId} {
+
+      allow read:
+        if isSignedIn()
+
+        && request.auth.uid == studentId
+
+        && resource.data.firebaseUid ==
+          request.auth.uid
+
+        && resource.data.role ==
+          'student'
+
+        && resource.data.accountStatus ==
+          'active'
+
+        && (
+          resource.data
+            .requiresParentalConsent != true
+
+          ||
+
+          resource.data.consentStatus ==
+            'approved'
+        );
+
+      /*
+        Student documents are created
+        only by the server.
+      */
+
+      allow create:
+        if false;
+
+      allow update:
+        if isSignedIn()
+
+        && request.auth.uid == studentId
+
+        /*
+          Existing account itself must
+          already be valid.
+        */
+
+        && resource.data.firebaseUid ==
+          request.auth.uid
+
+        && resource.data.role ==
+          'student'
+
+        && resource.data.accountStatus ==
+          'active'
+
+        && (
+          resource.data
+            .requiresParentalConsent != true
+
+          ||
+
+          resource.data.consentStatus ==
+            'approved'
+        )
+
+        /*
+          Student cannot modify security,
+          identity, account-status,
+          Youth ID, consent, XP, role,
+          email or other protected fields.
+
+          Only these onboarding fields
+          may change directly from the
+          Firebase client.
+        */
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'learningMode',
+            'interests',
+            'onboardingCompleted'
+          ])
+
+        /*
+          Validate learning preference.
+        */
+
+        && (
+          request.resource.data.learningMode == null
+
+          ||
+
+          request.resource.data.learningMode in [
+            'in-person',
+            'online',
+            'both'
+          ]
+        )
+
+        /*
+          Validate interests.
+        */
+
+        && request.resource.data.interests is list
+
+        && request.resource.data.interests.size()
+          <= 5
+
+        && request.resource.data.interests.hasOnly([
+          'coding',
+          'artificial intelligence',
+          'robotics',
+          'skilled trades',
+          'business',
+          'design',
+          'health',
+          'aviation',
+          'culinary'
+        ])
+
+        /*
+          Onboarding state must remain
+          boolean.
+        */
+
+        && request.resource.data
+          .onboardingCompleted is bool;
+
+      allow delete:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      WORKSHOPS
+      ========================================
+
+      Active students may view workshops.
+
+      Active administrators may also view
+      them through the Firebase client if
+      ever required.
+
+      All workshop modifications happen
+      through protected server/Admin SDK
+      APIs.
+    */
+
+    match /workshops/{workshopId} {
+
+      allow read:
+        if isActiveStudent()
+        || isActiveAdmin();
+
+      allow create, update, delete:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      WORKSHOP REGISTRATIONS
+      ========================================
+
+      SERVER ONLY.
+
+      Registration operations happen
+      through protected Next.js APIs.
+    */
+
+    match /registrations/{registrationId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      PENDING REGISTRATION
+      EMAIL VERIFICATION
+      PARENTAL CONSENT
+      ACCOUNT ACTIVATION
+      ========================================
+
+      Contains token hashes, consent state,
+      activation state and registration
+      information.
+
+      Never expose directly to Firebase
+      clients.
+    */
+
+    match /pendingRegistrations/{registrationId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      YOUTH ID RESERVATIONS
+      ========================================
+
+      Used by the server to guarantee
+      unique Youth IDs.
+    */
+
+    match /youthIdReservations/{youthId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      PASSWORD RESET REQUESTS
+      ========================================
+
+      Contains reset-token hashes,
+      guardian approval state and recovery
+      metadata.
+
+      SERVER ONLY.
+    */
+
+    match /passwordResetRequests/{requestId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      PASSWORD RESET RATE LIMITS
+      ========================================
+    */
+
+    match /passwordResetRateLimits/{documentId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      YOUTH ID RECOVERY RATE LIMITS
+      ========================================
+
+      Added for Forgot Youth ID protection.
+
+      The document IDs are hashed email
+      values and this collection must never
+      be exposed directly to clients.
+    */
+
+    match /youthIdRecoveryRateLimits/{documentId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      ADMIN ACCOUNTS
+      ========================================
+
+      Admin identity/status verification
+      happens through protected Next.js
+      APIs using Firebase Admin SDK.
+
+      Admin documents are never exposed
+      directly through Firestore client
+      access.
+    */
+
+    match /admins/{adminId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      ATTENDANCE
+      ========================================
+
+      QR/session information remains
+      server-only.
+    */
+
+    match /attendanceSessions/{sessionId} {
+
+      allow read, write:
+        if false;
+    }
+
+
+    /*
+      ========================================
+      DEFAULT DENY
+      ========================================
+
+      Anything not explicitly allowed
+      above is inaccessible through the
+      Firebase Client SDK.
+
+      This protects future collections
+      automatically until we deliberately
+      add rules for them.
+    */
+
+    match /{document=**} {
+
+      allow read, write:
+        if false;
+    }
+  }
+}

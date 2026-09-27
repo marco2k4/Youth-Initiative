@@ -14,6 +14,10 @@ import {
   requireAppCheck,
 } from "@/services/appCheckServer";
 
+import {
+  sendPasswordChangedEmail,
+} from "@/services/accountEmailServer";
+
 export const runtime = "nodejs";
 
 function hashToken(token) {
@@ -28,8 +32,10 @@ function hashesMatch(
   storedHash
 ) {
   if (
-    typeof providedHash !== "string" ||
-    typeof storedHash !== "string"
+    typeof providedHash !==
+      "string" ||
+    typeof storedHash !==
+      "string"
   ) {
     return false;
   }
@@ -81,7 +87,8 @@ function getDate(value) {
 
 function validatePassword(password) {
   if (
-    typeof password !== "string" ||
+    typeof password !==
+      "string" ||
     password.length < 10
   ) {
     return "Password must contain at least 10 characters.";
@@ -147,12 +154,15 @@ export async function POST(request) {
       token,
       password,
       confirmPassword,
-    } = await request.json();
+    } =
+      await request.json();
 
     if (
-      typeof requestId !== "string" ||
+      typeof requestId !==
+        "string" ||
       !requestId.trim() ||
-      typeof token !== "string" ||
+      typeof token !==
+        "string" ||
       !token.trim()
     ) {
       return errorResponse(
@@ -162,8 +172,10 @@ export async function POST(request) {
     }
 
     if (
-      typeof password !== "string" ||
-      typeof confirmPassword !== "string"
+      typeof password !==
+        "string" ||
+      typeof confirmPassword !==
+        "string"
     ) {
       return errorResponse(
         "Password information is incomplete.",
@@ -182,9 +194,13 @@ export async function POST(request) {
     }
 
     const passwordError =
-      validatePassword(password);
+      validatePassword(
+        password
+      );
 
-    if (passwordError) {
+    if (
+      passwordError
+    ) {
       return errorResponse(
         passwordError,
         400
@@ -196,7 +212,9 @@ export async function POST(request) {
         .collection(
           "passwordResetRequests"
         )
-        .doc(requestId.trim());
+        .doc(
+          requestId.trim()
+        );
 
     operationId =
       crypto.randomUUID();
@@ -204,15 +222,19 @@ export async function POST(request) {
     /*
       SECURITY TRANSACTION
 
-      The token is permanently consumed
-      BEFORE Firebase changes the password.
+      The token is permanently
+      consumed BEFORE Firebase
+      changes the password.
 
-      If anything fails afterward, this
-      token can never be used again.
+      If anything fails afterward,
+      this token can never be used
+      again.
     */
 
     await adminDb.runTransaction(
-      async (transaction) => {
+      async (
+        transaction
+      ) => {
         const resetSnapshot =
           await transaction.get(
             resetReference
@@ -239,8 +261,9 @@ export async function POST(request) {
         }
 
         /*
-          processing means another request
-          already consumed this token.
+          processing means another
+          request already consumed
+          this token.
 
           Never reopen it.
         */
@@ -327,7 +350,9 @@ export async function POST(request) {
         */
 
         const providedTokenHash =
-          hashToken(token);
+          hashToken(
+            token
+          );
 
         if (
           !hashesMatch(
@@ -358,7 +383,9 @@ export async function POST(request) {
             .collection(
               "students"
             )
-            .doc(studentId);
+            .doc(
+              studentId
+            );
 
         const studentSnapshot =
           await transaction.get(
@@ -377,12 +404,14 @@ export async function POST(request) {
           studentSnapshot.data();
 
         /*
-          Only active student accounts
-          can reset passwords.
+          Only active student
+          accounts can reset
+          passwords.
         */
 
         if (
-          student.role !== "student" ||
+          student.role !==
+            "student" ||
           student.accountStatus !==
             "active"
         ) {
@@ -392,7 +421,8 @@ export async function POST(request) {
         }
 
         /*
-          Verify Firebase UID consistency.
+          Verify Firebase UID
+          consistency.
         */
 
         if (
@@ -407,7 +437,8 @@ export async function POST(request) {
         }
 
         /*
-          Verify Youth ID consistency.
+          Verify Youth ID
+          consistency.
         */
 
         if (
@@ -424,8 +455,9 @@ export async function POST(request) {
         /*
           CONSUME TOKEN NOW.
 
-          From this point forward this
-          authorization can never be reused.
+          From this point forward
+          this authorization can
+          never be reused.
         */
 
         transaction.update(
@@ -454,9 +486,11 @@ export async function POST(request) {
     );
 
     /*
-      Change password through Firebase Auth.
+      Change password through
+      Firebase Auth.
 
-      Password is NEVER written to Firestore.
+      Password is NEVER written
+      to Firestore.
     */
 
     try {
@@ -468,16 +502,20 @@ export async function POST(request) {
       );
 
       /*
-        Kill existing Firebase sessions.
+        Kill existing Firebase
+        sessions.
 
-        User must authenticate again using
-        the new password.
+        User must authenticate
+        again using the new
+        password.
       */
 
       await adminAuth.revokeRefreshTokens(
         studentId
       );
-    } catch (authError) {
+    } catch (
+      authError
+    ) {
       console.error(
         "Firebase password update failed:",
         authError?.code ||
@@ -487,27 +525,33 @@ export async function POST(request) {
       /*
         FAIL CLOSED.
 
-        Do NOT restore resetTokenHash.
+        Do NOT restore
+        resetTokenHash.
 
-        User must request another reset
-        link if Firebase failed.
+        User must request another
+        reset link if Firebase
+        failed.
       */
 
       try {
-        await resetReference.update({
-          status:
-            "failed",
+        await resetReference.update(
+          {
+            status:
+              "failed",
 
-          failureStage:
-            "firebase_auth",
+            failureStage:
+              "firebase_auth",
 
-          failedAt:
-            FieldValue.serverTimestamp(),
+            failedAt:
+              FieldValue.serverTimestamp(),
 
-          updatedAt:
-            FieldValue.serverTimestamp(),
-        });
-      } catch (firestoreError) {
+            updatedAt:
+              FieldValue.serverTimestamp(),
+          }
+        );
+      } catch (
+        firestoreError
+      ) {
         console.error(
           "Could not record password reset failure:",
           firestoreError?.message
@@ -523,13 +567,16 @@ export async function POST(request) {
     /*
       Finalize Firestore record.
 
-      The password has already changed and
-      the token has already been destroyed.
+      The password has already
+      changed and the token has
+      already been destroyed.
     */
 
     try {
       await adminDb.runTransaction(
-        async (transaction) => {
+        async (
+          transaction
+        ) => {
           const resetSnapshot =
             await transaction.get(
               resetReference
@@ -575,14 +622,19 @@ export async function POST(request) {
           );
         }
       );
-    } catch (finalizationError) {
+    } catch (
+      finalizationError
+    ) {
       /*
-        Password change already succeeded.
+        Password change already
+        succeeded.
 
-        Never tell the user to reuse this
-        link because the token was consumed.
+        Never tell the user to
+        reuse this link because
+        the token was consumed.
 
-        Log the metadata failure instead.
+        Log the metadata failure
+        instead.
       */
 
       console.error(
@@ -591,22 +643,102 @@ export async function POST(request) {
       );
     }
 
-    return Response.json({
-      success: true,
+    /*
+      Send a security notification
+      AFTER the password has already
+      been changed successfully.
 
-      message:
-        "Password updated successfully. Please sign in again using your new password.",
-    });
-  } catch (error) {
+      Notification delivery must
+      never affect the completed
+      password reset.
+    */
+
+    try {
+      const [
+        studentSnapshot,
+        resetSnapshot,
+      ] =
+        await Promise.all([
+          adminDb
+            .collection(
+              "students"
+            )
+            .doc(
+              studentId
+            )
+            .get(),
+
+          resetReference.get(),
+        ]);
+
+      if (
+        studentSnapshot.exists &&
+        resetSnapshot.exists
+      ) {
+        const student =
+          studentSnapshot.data();
+
+        const reset =
+          resetSnapshot.data();
+
+        const notificationResult =
+          await sendPasswordChangedEmail(
+            {
+              firstName:
+                student.firstName,
+
+              email:
+                student.contactEmail,
+
+              parentEmail:
+                student.parentEmail,
+
+              recoveryMode:
+                reset.recoveryMode,
+            }
+          );
+
+        if (
+          !notificationResult.success
+        ) {
+          console.error(
+            "Password-change notification was not sent:",
+            notificationResult.error
+          );
+        }
+      }
+    } catch (
+      notificationError
+    ) {
+      console.error(
+        "Unexpected password-change notification error:",
+        notificationError
+      );
+    }
+
+    return Response.json(
+      {
+        success:
+          true,
+
+        message:
+          "Password updated successfully. Please sign in again using your new password.",
+      }
+    );
+  } catch (
+    error
+  ) {
     const appCheckResponse =
       appCheckErrorResponse(
         error
       );
 
-    if (appCheckResponse) {
+    if (
+      appCheckResponse
+    ) {
       return appCheckResponse;
     }
-    
+
     const errorCode =
       error?.message;
 
