@@ -1,53 +1,107 @@
 import crypto from "crypto";
 
-import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
+import {
+  FieldValue,
+} from "firebase-admin/firestore";
+
+import {
+  Resend,
+} from "resend";
 
 import {
   appCheckErrorResponse,
   requireAppCheck,
 } from "@/services/appCheckServer";
-import { adminDb } from "@/services/firebaseAdmin";
+
+import {
+  adminDb,
+} from "@/services/firebaseAdmin";
+
 import {
   calculateAge,
   registrationSchema,
 } from "@/validations/registrationSchema";
 
-export const runtime = "nodejs";
+export const runtime =
+  "nodejs";
 
-const resend = new Resend(
-  process.env.RESEND_API_KEY
-);
+const resend =
+  new Resend(
+    process.env.RESEND_API_KEY
+  );
 
-const CONSENT_EXPIRY_MINUTES = 30;
-const RESEND_ACCESS_HOURS = 24;
+const CONSENT_EXPIRY_MINUTES =
+  30;
 
-function normalizeName(value) {
+const EMAIL_VERIFICATION_EXPIRY_MINUTES =
+  30;
+
+const RESEND_ACCESS_HOURS =
+  24;
+
+function normalizeName(
+  value
+) {
   return value
     .trim()
-    .replace(/\s+/g, " ");
+    .replace(
+      /\s+/g,
+      " "
+    );
 }
 
-function hashToken(token) {
+function hashToken(
+  token
+) {
   return crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
+    .createHash(
+      "sha256"
+    )
+    .update(
+      token
+    )
+    .digest(
+      "hex"
+    );
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function escapeHtml(
+  value
+) {
+  return String(
+    value
+  )
+    .replaceAll(
+      "&",
+      "&amp;"
+    )
+    .replaceAll(
+      "<",
+      "&lt;"
+    )
+    .replaceAll(
+      ">",
+      "&gt;"
+    )
+    .replaceAll(
+      '"',
+      "&quot;"
+    )
+    .replaceAll(
+      "'",
+      "&#039;"
+    );
 }
 
-function maskEmail(email) {
+function maskEmail(
+  email
+) {
   if (
-    typeof email !== "string" ||
-    !email.includes("@")
+    typeof email !==
+      "string" ||
+    !email.includes(
+      "@"
+    )
   ) {
     return "parent or guardian email";
   }
@@ -55,10 +109,16 @@ function maskEmail(email) {
   const [
     localPart,
     domain,
-  ] = email.split("@");
+  ] =
+    email.split(
+      "@"
+    );
 
   const visibleCharacters =
-    localPart.slice(0, 2);
+    localPart.slice(
+      0,
+      2
+    );
 
   const hiddenCharacters =
     "*".repeat(
@@ -72,9 +132,14 @@ function maskEmail(email) {
   return `${visibleCharacters}${hiddenCharacters}@${domain}`;
 }
 
-export async function POST(request) {
+export async function POST(
+  request
+) {
   try {
-    await requireAppCheck(request);
+    await requireAppCheck(
+      request
+    );
+
     const requestBody =
       await request.json();
 
@@ -82,8 +147,11 @@ export async function POST(request) {
       await registrationSchema.validate(
         requestBody,
         {
-          abortEarly: false,
-          stripUnknown: true,
+          abortEarly:
+            false,
+
+          stripUnknown:
+            true,
         }
       );
 
@@ -113,15 +181,17 @@ export async function POST(request) {
       validatedData.dateOfBirth;
 
     const age =
-      calculateAge(dateOfBirth);
+      calculateAge(
+        dateOfBirth
+      );
 
     const requiresParentalConsent =
       age !== null &&
       age < 18;
 
     /*
-      Prevent duplicate pending
-      registrations.
+      Prevent duplicate
+      pending registrations.
     */
 
     const pendingRegistrationQuery =
@@ -141,9 +211,12 @@ export async function POST(request) {
             "pending_consent",
             "consent_approved",
             "consent_not_required",
+            "pending_email_verification",
           ]
         )
-        .limit(1)
+        .limit(
+          1
+        )
         .get();
 
     if (
@@ -151,7 +224,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "A registration is already pending for this email address.",
@@ -160,33 +234,40 @@ export async function POST(request) {
             "registration-already-pending",
         },
         {
-          status: 409,
+          status:
+            409,
         }
       );
     }
 
     /*
-      Check existing active account.
-
-      Student documents store the real
-      email as contactEmail.
+      Check whether an
+      active account already
+      uses this email.
     */
 
     const studentQuery =
       await adminDb
-        .collection("students")
+        .collection(
+          "students"
+        )
         .where(
           "contactEmail",
           "==",
           email
         )
-        .limit(1)
+        .limit(
+          1
+        )
         .get();
 
-    if (!studentQuery.empty) {
+    if (
+      !studentQuery.empty
+    ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "An account already exists with this email address. Please use the Login or Forgot Password option.",
@@ -195,50 +276,125 @@ export async function POST(request) {
             "account-already-exists",
         },
         {
-          status: 409,
+          status:
+            409,
         }
       );
     }
 
     /*
-      Create secure setup / consent token.
+      MINOR:
+      Create parent-consent
+      token.
+
+      ADULT:
+      Create email ownership
+      verification token.
+
+      Adult verification token
+      is never returned from this
+      API.
     */
 
-    const consentToken =
-      crypto
-        .randomBytes(32)
-        .toString("hex");
+    let consentToken =
+      null;
 
-    const consentTokenHash =
-      hashToken(consentToken);
+    let consentTokenHash =
+      null;
 
-    const consentExpiresAt =
-      new Date(
-        Date.now() +
-          CONSENT_EXPIRY_MINUTES *
-            60 *
-            1000
-      );
+    let consentExpiresAt =
+      null;
+
+    let emailVerificationToken =
+      null;
+
+    let emailVerificationTokenHash =
+      null;
+
+    let emailVerificationExpiresAt =
+      null;
+
+    if (
+      requiresParentalConsent
+    ) {
+      consentToken =
+        crypto
+          .randomBytes(
+            32
+          )
+          .toString(
+            "hex"
+          );
+
+      consentTokenHash =
+        hashToken(
+          consentToken
+        );
+
+      consentExpiresAt =
+        new Date(
+          Date.now() +
+            CONSENT_EXPIRY_MINUTES *
+              60 *
+              1000
+        );
+    } else {
+      emailVerificationToken =
+        crypto
+          .randomBytes(
+            32
+          )
+          .toString(
+            "hex"
+          );
+
+      emailVerificationTokenHash =
+        hashToken(
+          emailVerificationToken
+        );
+
+      emailVerificationExpiresAt =
+        new Date(
+          Date.now() +
+            EMAIL_VERIFICATION_EXPIRY_MINUTES *
+              60 *
+              1000
+        );
+    }
 
     /*
-      Separate token used only for requesting
-      another consent email.
+      Separate resend token
+      for minor consent.
 
-      It cannot approve consent.
+      This token cannot approve
+      consent.
     */
 
-    let resendToken = null;
-    let resendTokenHash = null;
-    let resendTokenExpiresAt = null;
+    let resendToken =
+      null;
 
-    if (requiresParentalConsent) {
+    let resendTokenHash =
+      null;
+
+    let resendTokenExpiresAt =
+      null;
+
+    if (
+      requiresParentalConsent
+    ) {
       resendToken =
         crypto
-          .randomBytes(32)
-          .toString("hex");
+          .randomBytes(
+            32
+          )
+          .toString(
+            "hex"
+          );
 
       resendTokenHash =
-        hashToken(resendToken);
+        hashToken(
+          resendToken
+        );
 
       resendTokenExpiresAt =
         new Date(
@@ -257,106 +413,355 @@ export async function POST(request) {
         )
         .doc();
 
-    await pendingRegistrationReference.set({
-      firstName,
-      lastName,
+    await pendingRegistrationReference.set(
+      {
+        firstName,
+        lastName,
 
-      fullName:
-        `${firstName} ${lastName}`,
+        fullName:
+          `${firstName} ${lastName}`,
 
-      email,
-      parentEmail,
+        email,
+        parentEmail,
 
-      dateOfBirth,
-      age,
+        dateOfBirth,
+        age,
 
-      requiresParentalConsent,
+        requiresParentalConsent,
 
-      consentStatus:
-        requiresParentalConsent
-          ? "pending"
-          : "not_required",
+        consentStatus:
+          requiresParentalConsent
+            ? "pending"
+            : "not_required",
 
-      status:
-        requiresParentalConsent
-          ? "pending_consent"
-          : "consent_not_required",
+        status:
+          requiresParentalConsent
+            ? "pending_consent"
+            : "pending_email_verification",
 
-      consentTokenHash,
+        consentTokenHash,
 
-      consentExpiresAt,
+        consentExpiresAt,
 
-      consentApprovedAt: null,
+        consentApprovedAt:
+          null,
 
-      guardianConfirmed: false,
-      termsAccepted: false,
-      consentTermsVersion: null,
+        emailVerificationStatus:
+          requiresParentalConsent
+            ? "not_required"
+            : "pending",
 
-      resendTokenHash,
-      resendTokenExpiresAt,
+        emailVerificationTokenHash,
 
-      resendCount: 0,
+        emailVerificationExpiresAt,
 
-      youthId: null,
-      firebaseUid: null,
+        emailVerifiedAt:
+          null,
 
-      emailStatus:
-        requiresParentalConsent
-          ? "pending"
-          : "not_required",
+        guardianConfirmed:
+          false,
 
-      emailSentAt: null,
+        termsAccepted:
+          false,
 
-      lastConsentEmailSentAt: null,
+        consentTermsVersion:
+          null,
 
-      createdAt:
-        FieldValue.serverTimestamp(),
+        resendTokenHash,
 
-      updatedAt:
-        FieldValue.serverTimestamp(),
-    });
+        resendTokenExpiresAt,
+
+        resendCount:
+          0,
+
+        youthId:
+          null,
+
+        firebaseUid:
+          null,
+
+        emailStatus:
+          "pending",
+
+        emailSentAt:
+          null,
+
+        lastConsentEmailSentAt:
+          null,
+
+        lastEmailVerificationSentAt:
+          null,
+
+        createdAt:
+          FieldValue.serverTimestamp(),
+
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      }
+    );
+
+    const appUrl =
+      process.env
+        .NEXT_PUBLIC_APP_URL ||
+      "http://localhost:3000";
+
+    const safeFirstName =
+      escapeHtml(
+        firstName
+      );
+
+    const safeLastName =
+      escapeHtml(
+        lastName
+      );
+
+    const safeFullName =
+      `${safeFirstName} ${safeLastName}`;
 
     /*
-      18+ students don't require
-      parental consent.
+      ADULT FLOW
+
+      Send verification email.
+      Do NOT return any password
+      setup token here.
     */
 
-    if (!requiresParentalConsent) {
+    if (
+      !requiresParentalConsent
+    ) {
+      const verificationUrl =
+        `${appUrl}/verify-email/${pendingRegistrationReference.id}` +
+        `#token=${encodeURIComponent(
+          emailVerificationToken
+        )}`;
+
+      const emailResult =
+        await resend.emails.send(
+          {
+            from:
+              process.env
+                .EMAIL_FROM ||
+              "SAIT Youth Initiative <onboarding@resend.dev>",
+
+            to: [
+              email,
+            ],
+
+            subject:
+              "Verify Your Email – SAIT Youth Initiative",
+
+            html: `
+              <!doctype html>
+
+              <html lang="en">
+                <body
+                  style="
+                    margin:0;
+                    padding:30px;
+                    background:#f4f5f7;
+                    font-family:Arial,Helvetica,sans-serif;
+                    color:#222;
+                  "
+                >
+                  <div
+                    style="
+                      max-width:620px;
+                      margin:auto;
+                      background:#ffffff;
+                      border-radius:14px;
+                      padding:32px;
+                      border-top:4px solid #e2232a;
+                    "
+                  >
+                    <div
+                      style="
+                        color:#e2232a;
+                        font-size:34px;
+                        font-weight:900;
+                      "
+                    >
+                      SAIT
+                    </div>
+
+                    <p
+                      style="
+                        margin-top:4px;
+                        color:#555;
+                        font-weight:700;
+                      "
+                    >
+                      Youth Initiative
+                    </p>
+
+                    <h1>
+                      Verify Your Email
+                    </h1>
+
+                    <p>
+                      Hi ${safeFirstName},
+                    </p>
+
+                    <p>
+                      You started creating
+                      an account on the SAIT
+                      Youth Initiative
+                      platform.
+                    </p>
+
+                    <p>
+                      Please verify that
+                      this email address
+                      belongs to you before
+                      creating your
+                      password.
+                    </p>
+
+                    <a
+                      href="${verificationUrl}"
+                      style="
+                        display:inline-block;
+                        margin-top:12px;
+                        padding:14px 24px;
+                        background:#e2232a;
+                        color:white;
+                        text-decoration:none;
+                        border-radius:8px;
+                        font-weight:700;
+                      "
+                    >
+                      Verify Email
+                    </a>
+
+                    <p
+                      style="
+                        margin-top:24px;
+                        color:#777;
+                        font-size:13px;
+                      "
+                    >
+                      This secure
+                      verification link
+                      expires in 30
+                      minutes.
+                    </p>
+
+                    <p
+                      style="
+                        color:#777;
+                        font-size:13px;
+                      "
+                    >
+                      If you did not create
+                      this registration,
+                      you can ignore this
+                      email.
+                    </p>
+                  </div>
+                </body>
+              </html>
+            `,
+          }
+        );
+
+      if (
+        emailResult.error
+      ) {
+        await pendingRegistrationReference.update(
+          {
+            status:
+              "email_delivery_failed",
+
+            emailStatus:
+              "failed",
+
+            emailError:
+              emailResult
+                .error
+                .message ||
+              "Email could not be sent.",
+
+            updatedAt:
+              FieldValue.serverTimestamp(),
+          }
+        );
+
+        return Response.json(
+          {
+            success:
+              false,
+
+            message:
+              "We could not send the verification email. Please try registering again.",
+
+            code:
+              "verification-email-failed",
+          },
+          {
+            status:
+              502,
+          }
+        );
+      }
+
+      await pendingRegistrationReference.update(
+        {
+          emailStatus:
+            "sent",
+
+          emailId:
+            emailResult
+              .data
+              ?.id ||
+            null,
+
+          emailSentAt:
+            FieldValue.serverTimestamp(),
+
+          lastEmailVerificationSentAt:
+            FieldValue.serverTimestamp(),
+
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
+
       return Response.json(
         {
-          success: true,
+          success:
+            true,
 
           message:
-            "Registration created successfully.",
+            "A verification email has been sent to your email address.",
 
           registrationId:
             pendingRegistrationReference.id,
 
           email,
+
           firstName,
 
           requiresParentalConsent:
             false,
 
           nextStep:
-            "set_password",
+            "verify_email",
 
-          setupToken:
-            consentToken,
+          emailSent:
+            true,
         },
         {
-          status: 201,
+          status:
+            201,
         }
       );
     }
 
     /*
-      Under-18 consent email.
-    */
+      MINOR FLOW
 
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "http://localhost:3000";
+      Send parental consent
+      email.
+    */
 
     const consentUrl =
       `${appUrl}/consent/${pendingRegistrationReference.id}` +
@@ -364,159 +769,172 @@ export async function POST(request) {
         consentToken
       )}`;
 
-    const safeFirstName =
-      escapeHtml(firstName);
-
-    const safeLastName =
-      escapeHtml(lastName);
-
-    const safeFullName =
-      `${safeFirstName} ${safeLastName}`;
-
     const emailResult =
-      await resend.emails.send({
-        from:
-          process.env.EMAIL_FROM ||
-          "SAIT Youth Initiative <onboarding@resend.dev>",
+      await resend.emails.send(
+        {
+          from:
+            process.env
+              .EMAIL_FROM ||
+            "SAIT Youth Initiative <onboarding@resend.dev>",
 
-        to: [parentEmail],
+          to: [
+            parentEmail,
+          ],
 
-        subject:
-          "Parental Consent Required – SAIT Youth Initiative",
+          subject:
+            "Parental Consent Required – SAIT Youth Initiative",
 
-        html: `
-          <!doctype html>
+          html: `
+            <!doctype html>
 
-          <html lang="en">
-            <body
-              style="
-                margin:0;
-                padding:30px;
-                background:#f4f5f7;
-                font-family:Arial,Helvetica,sans-serif;
-                color:#222;
-              "
-            >
-              <div
+            <html lang="en">
+              <body
                 style="
-                  max-width:620px;
-                  margin:auto;
-                  background:#ffffff;
-                  border-radius:14px;
-                  padding:32px;
-                  border-top:4px solid #e2232a;
+                  margin:0;
+                  padding:30px;
+                  background:#f4f5f7;
+                  font-family:Arial,Helvetica,sans-serif;
+                  color:#222;
                 "
               >
                 <div
                   style="
-                    color:#e2232a;
-                    font-size:34px;
-                    font-weight:900;
+                    max-width:620px;
+                    margin:auto;
+                    background:#ffffff;
+                    border-radius:14px;
+                    padding:32px;
+                    border-top:4px solid #e2232a;
                   "
                 >
-                  SAIT
+                  <div
+                    style="
+                      color:#e2232a;
+                      font-size:34px;
+                      font-weight:900;
+                    "
+                  >
+                    SAIT
+                  </div>
+
+                  <p
+                    style="
+                      margin-top:4px;
+                      color:#555;
+                      font-weight:700;
+                    "
+                  >
+                    Youth Initiative
+                  </p>
+
+                  <h1>
+                    Parental Consent
+                    Request
+                  </h1>
+
+                  <p>
+                    Hello Parent or
+                    Guardian,
+                  </p>
+
+                  <p>
+                    <strong>
+                      ${safeFullName}
+                    </strong>
+                    has started creating
+                    an account on the SAIT
+                    Youth Initiative
+                    platform.
+                  </p>
+
+                  <p>
+                    Because the student
+                    is under 18, parent or
+                    guardian consent is
+                    required before the
+                    account can be
+                    activated.
+                  </p>
+
+                  <a
+                    href="${consentUrl}"
+                    style="
+                      display:inline-block;
+                      margin-top:12px;
+                      padding:14px 24px;
+                      background:#e2232a;
+                      color:white;
+                      text-decoration:none;
+                      border-radius:8px;
+                      font-weight:700;
+                    "
+                  >
+                    Review and Provide
+                    Consent
+                  </a>
+
+                  <p
+                    style="
+                      margin-top:24px;
+                      color:#777;
+                      font-size:13px;
+                    "
+                  >
+                    This secure consent
+                    link expires in 30
+                    minutes.
+                  </p>
+
+                  <p
+                    style="
+                      color:#777;
+                      font-size:13px;
+                    "
+                  >
+                    If you did not expect
+                    this request, you can
+                    ignore this email.
+                  </p>
                 </div>
-
-                <p
-                  style="
-                    margin-top:4px;
-                    color:#555;
-                    font-weight:700;
-                  "
-                >
-                  Youth Initiative
-                </p>
-
-                <h1>
-                  Parental Consent Request
-                </h1>
-
-                <p>
-                  Hello Parent or Guardian,
-                </p>
-
-                <p>
-                  <strong>
-                    ${safeFullName}
-                  </strong>
-                  has started creating an
-                  account on the SAIT Youth
-                  Initiative platform.
-                </p>
-
-                <p>
-                  Because the student is under
-                  18, parent or guardian consent
-                  is required before the account
-                  can be activated.
-                </p>
-
-                <a
-                  href="${consentUrl}"
-                  style="
-                    display:inline-block;
-                    margin-top:12px;
-                    padding:14px 24px;
-                    background:#e2232a;
-                    color:white;
-                    text-decoration:none;
-                    border-radius:8px;
-                    font-weight:700;
-                  "
-                >
-                  Review and Provide Consent
-                </a>
-
-                <p
-                  style="
-                    margin-top:24px;
-                    color:#777;
-                    font-size:13px;
-                  "
-                >
-                  This secure consent link expires
-                  in 30 minutes.
-                </p>
-
-                <p
-                  style="
-                    color:#777;
-                    font-size:13px;
-                  "
-                >
-                  If you did not expect this
-                  request, you can ignore this
-                  email.
-                </p>
-              </div>
-            </body>
-          </html>
-        `,
-      });
+              </body>
+            </html>
+          `,
+        }
+      );
 
     /*
-      Registration itself succeeded.
+      Registration itself
+      succeeded.
 
-      If email delivery fails, don't throw away
-      the registration. Send the student to the
-      pending page where they can retry.
+      If the parent email fails,
+      keep the registration so
+      the existing resend flow
+      can be used.
     */
 
-    if (emailResult.error) {
-      await pendingRegistrationReference.update({
-        emailStatus: "failed",
+    if (
+      emailResult.error
+    ) {
+      await pendingRegistrationReference.update(
+        {
+          emailStatus:
+            "failed",
 
-        emailError:
-          emailResult.error.message ||
-          "Email could not be sent.",
+          emailError:
+            emailResult
+              .error
+              .message ||
+            "Email could not be sent.",
 
-        updatedAt:
-          FieldValue.serverTimestamp(),
-      });
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
 
       return Response.json(
         {
-          success: true,
+          success:
+            true,
 
           message:
             "Registration was created, but the consent email could not be delivered. Please resend it.",
@@ -525,10 +943,13 @@ export async function POST(request) {
             pendingRegistrationReference.id,
 
           email,
+
           firstName,
 
           parentEmailMasked:
-            maskEmail(parentEmail),
+            maskEmail(
+              parentEmail
+            ),
 
           requiresParentalConsent:
             true,
@@ -536,36 +957,44 @@ export async function POST(request) {
           nextStep:
             "parent_consent",
 
-          emailSent: false,
+          emailSent:
+            false,
 
           resendToken,
         },
         {
-          status: 202,
+          status:
+            202,
         }
       );
     }
 
-    await pendingRegistrationReference.update({
-      emailStatus: "sent",
+    await pendingRegistrationReference.update(
+      {
+        emailStatus:
+          "sent",
 
-      emailId:
-        emailResult.data?.id ||
-        null,
+        emailId:
+          emailResult
+            .data
+            ?.id ||
+          null,
 
-      emailSentAt:
-        FieldValue.serverTimestamp(),
+        emailSentAt:
+          FieldValue.serverTimestamp(),
 
-      lastConsentEmailSentAt:
-        FieldValue.serverTimestamp(),
+        lastConsentEmailSentAt:
+          FieldValue.serverTimestamp(),
 
-      updatedAt:
-        FieldValue.serverTimestamp(),
-    });
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      }
+    );
 
     return Response.json(
       {
-        success: true,
+        success:
+          true,
 
         message:
           "Parental consent email sent successfully.",
@@ -574,10 +1003,13 @@ export async function POST(request) {
           pendingRegistrationReference.id,
 
         email,
+
         firstName,
 
         parentEmailMasked:
-          maskEmail(parentEmail),
+          maskEmail(
+            parentEmail
+          ),
 
         requiresParentalConsent:
           true,
@@ -585,22 +1017,30 @@ export async function POST(request) {
         nextStep:
           "parent_consent",
 
-        emailSent: true,
+        emailSent:
+          true,
 
         resendToken,
       },
       {
-        status: 201,
+        status:
+          201,
       }
     );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     const appCheckResponse =
-      appCheckErrorResponse(error);
+      appCheckErrorResponse(
+        error
+      );
 
-    if (appCheckResponse) {
+    if (
+      appCheckResponse
+    ) {
       return appCheckResponse;
     }
-    
+
     console.error(
       "Registration API error:",
       error
@@ -612,7 +1052,8 @@ export async function POST(request) {
     ) {
       return Response.json(
         {
-          success: false,
+          success:
+            false,
 
           message:
             "Please correct the information entered and try again.",
@@ -641,20 +1082,23 @@ export async function POST(request) {
             ),
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
     return Response.json(
       {
-        success: false,
+        success:
+          false,
 
         message:
           "We could not complete your registration. Please try again.",
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }

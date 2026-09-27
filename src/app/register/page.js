@@ -79,17 +79,21 @@ export default function RegisterPage() {
           : "",
       };
 
-      const response = await appCheckFetch("/api/register", {
-        method: "POST",
+      const response = await appCheckFetch(
+        "/api/register",
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+          headers: {
+            "Content-Type": "application/json",
+          },
 
-        body: JSON.stringify(requestBody),
-      });
+          body: JSON.stringify(requestBody),
+        }
+      );
 
-      const responseData = await response.json();
+      const responseData =
+        await response.json();
 
       if (!response.ok) {
         if (responseData.fieldErrors) {
@@ -128,8 +132,37 @@ export default function RegisterPage() {
         })
       );
 
+      /*
+        ADULT FLOW
+
+        Adult students must verify
+        ownership of their email before
+        password creation.
+      */
+
       if (
-        responseData.nextStep === "set_password" &&
+        responseData.nextStep ===
+        "verify_email"
+      ) {
+        router.push(
+          `/email-verification-pending?registrationId=${encodeURIComponent(
+            responseData.registrationId
+          )}`
+        );
+
+        return;
+      }
+
+      /*
+        Legacy / setup flow.
+
+        Keep this so existing setup
+        responses remain compatible.
+      */
+
+      if (
+        responseData.nextStep ===
+          "set_password" &&
         responseData.setupToken
       ) {
         router.push(
@@ -143,13 +176,23 @@ export default function RegisterPage() {
         return;
       }
 
+      /*
+        MINOR FLOW
+
+        Student waits for parent or
+        guardian consent.
+      */
+
       router.push(
         `/consent-pending?registrationId=${encodeURIComponent(
           responseData.registrationId
         )}`
       );
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error(
+        "Registration error:",
+        error
+      );
 
       setRegistrationError(
         error.message ||
@@ -169,7 +212,9 @@ export default function RegisterPage() {
               type="button"
               className="auth-back-button"
               aria-label="Return to the previous page"
-              onClick={() => router.back()}
+              onClick={() =>
+                router.back()
+              }
             >
               <ArrowLeft
                 size={29}
@@ -177,7 +222,10 @@ export default function RegisterPage() {
               />
             </button>
 
-            <Link href="/" className="auth-logo-link">
+            <Link
+              href="/"
+              className="auth-logo-link"
+            >
               <Image
                 src="/images/landing/sait-logo.jpg"
                 alt="Southern Alberta Institute of Technology"
@@ -191,19 +239,28 @@ export default function RegisterPage() {
 
           <div className="register-content">
             <div className="auth-heading">
-              <h1>Create Your Account</h1>
+              <h1>
+                Create Your Account
+              </h1>
 
               <p>
-                Enter your information to get started.
+                Enter your information
+                to get started.
               </p>
             </div>
 
             <Formik
-              initialValues={initialValues}
-              validationSchema={registrationSchema}
+              initialValues={
+                initialValues
+              }
+              validationSchema={
+                registrationSchema
+              }
               validateOnBlur
               validateOnChange
-              onSubmit={handleRegistration}
+              onSubmit={
+                handleRegistration
+              }
             >
               {({
                 values,
@@ -213,7 +270,9 @@ export default function RegisterPage() {
                 setFieldValue,
               }) => {
                 const studentAge =
-                  calculateAge(values.dateOfBirth);
+                  calculateAge(
+                    values.dateOfBirth
+                  );
 
                 const requiresParentalConsent =
                   studentAge !== null &&
@@ -246,11 +305,15 @@ export default function RegisterPage() {
                               ? "auth-input-error"
                               : ""
                           }`}
-                          onChange={(event) => {
+                          onChange={(
+                            event
+                          ) => {
                             setFieldValue(
                               "firstName",
                               normalizeName(
-                                event.target.value
+                                event
+                                  .target
+                                  .value
                               )
                             );
                           }}
@@ -284,11 +347,15 @@ export default function RegisterPage() {
                               ? "auth-input-error"
                               : ""
                           }`}
-                          onChange={(event) => {
+                          onChange={(
+                            event
+                          ) => {
                             setFieldValue(
                               "lastName",
                               normalizeName(
-                                event.target.value
+                                event
+                                  .target
+                                  .value
                               )
                             );
                           }}
@@ -323,11 +390,16 @@ export default function RegisterPage() {
                               ? "auth-input-error"
                               : ""
                           }`}
-                          onChange={(event) => {
+                          onChange={(
+                            event
+                          ) => {
                             setFieldValue(
                               "email",
                               event.target.value
-                                .replace(/\s/g, "")
+                                .replace(
+                                  /\s/g,
+                                  ""
+                                )
                                 .toLowerCase()
                             );
                           }}
@@ -378,7 +450,8 @@ export default function RegisterPage() {
                             htmlFor="parentEmail"
                             className="auth-form-label"
                           >
-                            Parent / Guardian Email
+                            Parent /
+                            Guardian Email
                           </label>
 
                           <Field
@@ -387,7 +460,9 @@ export default function RegisterPage() {
                             type="email"
                             inputMode="email"
                             autoComplete="email"
-                            maxLength={254}
+                            maxLength={
+                              254
+                            }
                             placeholder="parent@example.com"
                             className={`auth-form-input ${
                               errors.parentEmail &&
@@ -395,11 +470,18 @@ export default function RegisterPage() {
                                 ? "auth-input-error"
                                 : ""
                             }`}
-                            onChange={(event) => {
+                            onChange={(
+                              event
+                            ) => {
                               setFieldValue(
                                 "parentEmail",
-                                event.target.value
-                                  .replace(/\s/g, "")
+                                event
+                                  .target
+                                  .value
+                                  .replace(
+                                    /\s/g,
+                                    ""
+                                  )
                                   .toLowerCase()
                               );
                             }}
@@ -418,7 +500,9 @@ export default function RegisterPage() {
                           className="registration-server-error"
                           role="alert"
                         >
-                          {registrationError}
+                          {
+                            registrationError
+                          }
                         </div>
                       )}
                     </div>
@@ -427,16 +511,21 @@ export default function RegisterPage() {
                       <button
                         type="submit"
                         className="register-submit-button"
-                        disabled={isSubmitting}
+                        disabled={
+                          isSubmitting
+                        }
                       >
                         {isSubmitting ? (
                           <>
                             <LoaderCircle
-                              size={20}
+                              size={
+                                20
+                              }
                               className="button-spinner"
                             />
 
-                            Creating Account...
+                            Creating
+                            Account...
                           </>
                         ) : (
                           "Create Account"
@@ -444,7 +533,8 @@ export default function RegisterPage() {
                       </button>
 
                       <p className="register-login-text">
-                        Already have an account?{" "}
+                        Already have an
+                        account?{" "}
                         <Link href="/login">
                           Login
                         </Link>
@@ -466,19 +556,24 @@ export default function RegisterPage() {
             </span>
 
             <h2>
-              Your journey starts with one simple step.
+              Your journey starts with
+              one simple step.
             </h2>
 
             <p>
-              Create your student profile, complete the
-              parent-supported setup and begin exploring
-              learning opportunities.
+              Create your student
+              profile, complete the
+              parent-supported setup and
+              begin exploring learning
+              opportunities.
             </p>
 
             <div className="registration-process-list">
               <div>
                 <span>
-                  <Mail size={20} />
+                  <Mail
+                    size={20}
+                  />
                 </span>
 
                 <div>
@@ -487,7 +582,8 @@ export default function RegisterPage() {
                   </strong>
 
                   <p>
-                    We send a secure consent link to the
+                    We send a secure
+                    consent link to the
                     email entered.
                   </p>
                 </div>
@@ -495,24 +591,31 @@ export default function RegisterPage() {
 
               <div>
                 <span>
-                  <ShieldCheck size={20} />
+                  <ShieldCheck
+                    size={20}
+                  />
                 </span>
 
                 <div>
                   <strong>
-                    Parent-supported setup
+                    Parent-supported
+                    setup
                   </strong>
 
                   <p>
-                    A parent or guardian approves consent
-                    and creates the password.
+                    A parent or guardian
+                    approves consent and
+                    creates the
+                    password.
                   </p>
                 </div>
               </div>
 
               <div>
                 <span>
-                  <CheckCircle2 size={20} />
+                  <CheckCircle2
+                    size={20}
+                  />
                 </span>
 
                 <div>
@@ -521,7 +624,8 @@ export default function RegisterPage() {
                   </strong>
 
                   <p>
-                    The student receives their unique Youth
+                    The student receives
+                    their unique Youth
                     Initiative ID.
                   </p>
                 </div>

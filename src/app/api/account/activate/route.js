@@ -280,11 +280,12 @@ export async function POST(
 
   try {
     /*
-      Account activation is a sensitive,
-      one-time action.
+      Account activation is a
+      sensitive one-time action.
 
-      The frontend sends a limited-use
-      App Check token, so consume it here.
+      The frontend sends a
+      limited-use App Check token,
+      so consume it here.
     */
 
     await requireAppCheck(
@@ -323,7 +324,8 @@ export async function POST(
             "All password fields are required.",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
@@ -341,7 +343,8 @@ export async function POST(
             "Passwords do not match.",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
@@ -352,13 +355,14 @@ export async function POST(
           "pendingRegistrations"
         )
         .doc(
-          registrationId
+          registrationId.trim()
         );
 
     /*
-      Atomically validate the setup token
-      and lock the registration while the
-      Firebase account is being created.
+      Atomically validate the
+      activation token and lock
+      the registration while the
+      Firebase account is created.
     */
 
     const registration =
@@ -410,14 +414,20 @@ export async function POST(
             registrationData.requiresParentalConsent ===
             true;
 
-          let storedTokenHash;
+          let storedTokenHash =
+            null;
 
-          let tokenExpiry;
+          let tokenExpiry =
+            null;
 
           /*
-            Minor:
-            parental consent must already
-            have been approved.
+            MINOR FLOW
+
+            Parent or guardian consent
+            must already be approved.
+
+            /api/consent/approve creates
+            a separate activation token.
           */
 
           if (
@@ -445,36 +455,47 @@ export async function POST(
               );
           } else {
             /*
-              Adult:
-              the setup token created during
-              registration is used directly.
+              ADULT FLOW
+
+              The contact email must
+              already have been verified.
+
+              /api/email-verification/verify
+              creates the activation token
+              used here.
+
+              The original email
+              verification token can never
+              activate an account.
             */
 
             if (
               registrationData.status !==
-                "consent_not_required" ||
+                "email_verified" ||
+              registrationData.emailVerificationStatus !==
+                "verified" ||
               registrationData.consentStatus !==
                 "not_required"
             ) {
               throw createRequestError(
-                "This registration is not ready for account activation.",
-                409,
-                "invalid-registration-state"
+                "Please verify your email address before creating your account.",
+                403,
+                "email-verification-required"
               );
             }
 
             storedTokenHash =
-              registrationData.consentTokenHash;
+              registrationData.activationTokenHash;
 
             tokenExpiry =
               getExpiryDate(
-                registrationData.consentExpiresAt
+                registrationData.activationExpiresAt
               );
           }
 
           const providedTokenHash =
             hashToken(
-              token
+              token.trim()
             );
 
           if (
@@ -540,13 +561,16 @@ export async function POST(
       true;
 
     /*
-      Generate a random Youth ID that
-      contains no personal information.
+      Generate a random Youth ID.
+
+      The ID contains no name,
+      birth date or other personal
+      information.
     */
 
     youthIdReservation =
       await reserveUniqueYouthId(
-        registrationId
+        registrationId.trim()
       );
 
     const youthId =
@@ -556,8 +580,8 @@ export async function POST(
       `${youthId.toLowerCase()}@youthinitiative.local`;
 
     /*
-      Firebase Authentication securely
-      stores the password.
+      Firebase Authentication
+      securely stores the password.
 
       The password is never stored
       in Firestore.
@@ -574,6 +598,14 @@ export async function POST(
           displayName:
             `${registration.firstName} ${registration.lastName}`,
 
+          /*
+            This is the internal
+            Youth-ID Firebase account.
+
+            It is not claiming that
+            the contact email itself
+            is the Firebase Auth email.
+          */
           emailVerified:
             true,
 
@@ -600,7 +632,8 @@ export async function POST(
         firebaseUid:
           createdUser.uid,
 
-        registrationId,
+        registrationId:
+          registrationId.trim(),
 
         firstName:
           registration.firstName,
@@ -613,6 +646,30 @@ export async function POST(
 
         contactEmail:
           registration.email,
+
+        /*
+          Adults proved ownership of
+          their contact email during
+          registration.
+
+          Minor student contact email
+          ownership is not independently
+          verified by the parental
+          consent flow.
+        */
+        contactEmailVerified:
+          registration.requiresParentalConsent ===
+          true
+            ? false
+            : registration.emailVerificationStatus ===
+                "verified",
+
+        contactEmailVerifiedAt:
+          registration.requiresParentalConsent ===
+          true
+            ? null
+            : registration.emailVerifiedAt ||
+              null,
 
         parentEmail:
           registration.parentEmail ||
@@ -644,21 +701,26 @@ export async function POST(
         learningMode:
           null,
 
-        interests: [],
+        interests:
+          [],
 
         onboardingCompleted:
           false,
 
-        totalXp: 0,
+        totalXp:
+          0,
 
-        level: 1,
+        level:
+          1,
 
-        badgeCount: 0,
+        badgeCount:
+          0,
 
         completedWorkshopCount:
           0,
 
-        currentStreak: 0,
+        currentStreak:
+          0,
 
         createdAt:
           FieldValue.serverTimestamp(),
@@ -672,10 +734,14 @@ export async function POST(
     );
 
     /*
-      Finalize the registration.
+      Finalize registration.
 
-      Minor consent was already recorded
-      in /api/consent/approve.
+      BOTH adult and minor flows
+      now use a separate activation
+      token.
+
+      Remove that token after the
+      account has been created.
     */
 
     const registrationUpdate =
@@ -693,8 +759,17 @@ export async function POST(
         accountCreatedAt:
           FieldValue.serverTimestamp(),
 
+        activationTokenHash:
+          null,
+
+        activationExpiresAt:
+          null,
+
         activationInProgress:
           false,
+
+        activationStartedAt:
+          null,
 
         activationCompletedAt:
           FieldValue.serverTimestamp(),
@@ -703,16 +778,34 @@ export async function POST(
           FieldValue.serverTimestamp(),
       };
 
+    /*
+      Clean any obsolete setup
+      material as defense-in-depth.
+    */
+
     if (
       registration.requiresParentalConsent ===
       true
     ) {
-      registrationUpdate.activationTokenHash =
+      registrationUpdate.consentTokenHash =
         null;
 
-      registrationUpdate.activationExpiresAt =
+      registrationUpdate.consentExpiresAt =
         null;
     } else {
+      registrationUpdate.emailVerificationTokenHash =
+        null;
+
+      registrationUpdate.emailVerificationExpiresAt =
+        null;
+
+      /*
+        These fields belonged to the
+        older adult registration flow.
+        Clearing them is safe if they
+        happen to exist.
+      */
+
       registrationUpdate.consentTokenHash =
         null;
 
@@ -753,13 +846,17 @@ export async function POST(
           registration.firstName,
       },
       {
-        status: 201,
+        status:
+          201,
       }
     );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     /*
-      App Check errors should return
-      a clean 401 response.
+      App Check errors should
+      return the App Check
+      response.
     */
 
     const appCheckResponse =
@@ -781,9 +878,11 @@ export async function POST(
     );
 
     /*
-      If Firebase Auth was created but
-      Firestore failed, remove the user
-      so a broken account is not left.
+      If Firebase Auth was
+      created but Firestore
+      failed, remove the Auth
+      user so a broken account
+      is not left behind.
     */
 
     if (
@@ -805,7 +904,7 @@ export async function POST(
 
     /*
       Remove an unused Youth ID
-      reservation after a failure.
+      reservation after failure.
     */
 
     if (
@@ -827,8 +926,10 @@ export async function POST(
     }
 
     /*
-      Release the activation lock so
-      the user can retry.
+      Release the activation lock
+      so the user can retry while
+      the activation token remains
+      valid.
     */
 
     if (
@@ -902,7 +1003,8 @@ export async function POST(
             "An account has already been created for this registration.",
         },
         {
-          status: 409,
+          status:
+            409,
         }
       );
     }
@@ -916,7 +1018,8 @@ export async function POST(
           "The account could not be activated. Please try again.",
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }
