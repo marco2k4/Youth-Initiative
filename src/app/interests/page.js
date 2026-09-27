@@ -89,7 +89,7 @@ export default function InterestsPage() {
 
   const {
     user,
-    student,
+    studentProfile: student,
     loading: authLoading,
   } = useAuth();
 
